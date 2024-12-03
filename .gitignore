@@ -1,0 +1,50 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+vendor/
+
+# emacs backup files
+*~
+
+# build binary files
+bin
+
+*.log
+coverage.*
+cover.out
+tools
+build
+.vscode
+.idea
+docs/scripts/generated_script.sh
+
+# Draw.io backup files
+.*.png.bkp
+
+# JetBrains IDE files
+.idea/
+*.iml
+
+# Mac trash
+.DS_Store
+
+# word counts
+/counts
+
+# Core Chart generated dependencies
+core-chart/Chart.lock
+core-chart/charts/
+
+# Milvus volumes of path pkg/operators-db/volumes/*
+pkg/operators-db/volumes/*
