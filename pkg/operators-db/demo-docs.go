@@ -1,13 +1,16 @@
 package operators_db
 
-import "github.com/tmc/langchaingo/schema"
+import (
+	"fmt"
+	"github.com/tmc/langchaingo/schema"
+)
 
 // getDocs returns a set of operator documents.
 // This should be replaced with a scrapper that fetches the data from the web
 // and keeps it up to date.
 func getDocs() []schema.Document {
 	type meta = map[string]any
-	return []schema.Document{
+	docs := []schema.Document{
 		{PageContent: "Strimzi provides a way to run an Apache Kafka cluster on Kubernetes or OpenShift in various deployment configurations.",
 			Metadata: meta{
 				"schema": OperatorSchema{
@@ -43,10 +46,23 @@ func getDocs() []schema.Document {
 					},
 					HelmSetup: []string{},
 				}}},
+		{PageContent: "RabbitMQ is an open source general-purpose message broker that is designed for consistent, highly-available messaging scenarios (both synchronous and asynchronous).",
+			Metadata: meta{
+				"schema": OperatorSchema{
+					Name:       "RabbitMQ",
+					Categories: []string{"Helm chart", "Streaming and messaging"},
+					Features: []string{
+						"Why RabbitMQ? RabbitMQ is a reliable and mature messaging and streaming broker, which is easy to deploy on cloud environments, on-premises, and on your local machine. It is currently used by millions worldwide.",
+						"Interoperable: RabbitMQ supports several open standard protocols, including AMQP 1.0 and MQTT 5.0. There are multiple client libraries available, which can be used with your programming language of choice, just pick one. No vendor lock-in!",
+						"Flexible: RabbitMQ provides many options you can combine to define how your messages go from the publisher to one or many consumers. Routing, filtering, streaming, federation, and so on, you name it.",
+						"Reliable: With the ability to acknowledge message delivery and to replicate messages across a cluster, you can ensure your messages are safe with RabbitMQ.",
+					},
+					HelmSetup: []string{},
+				}}},
 		{PageContent: "The RocketMQ Operator manages the Apache RocketMQ service instances deployed on the Kubernetes cluster.",
 			Metadata: meta{
 				"schema": OperatorSchema{
-					Name:       "RabbitMQ-Operator",
+					Name:       "RocketMQ-Operator",
 					Categories: []string{"OLM Operator", "Streaming and messaging"},
 					Features: []string{
 						"Horizontal Scaling - Safely and seamlessly scale up each component of RocketMQ.",
@@ -68,4 +84,11 @@ func getDocs() []schema.Document {
 					HelmSetup: []string{},
 				}}},
 	}
+
+	for idx := range docs {
+		docs[idx].PageContent = fmt.Sprintf("%s\nMetadata:\n%s",
+			docs[idx].PageContent, docs[idx].Metadata["schema"])
+	}
+
+	return docs
 }

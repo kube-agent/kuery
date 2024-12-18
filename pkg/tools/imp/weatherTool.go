@@ -1,10 +1,15 @@
-package tools
+package imp
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/tmc/langchaingo/llms"
 	"strings"
+)
+
+const (
+	functionToolType = "function"
 )
 
 type WeatherTool struct {
@@ -16,7 +21,7 @@ func (wt *WeatherTool) Name() string {
 
 func (wt *WeatherTool) LLMTool() *llms.Tool {
 	return &llms.Tool{
-		Type: "function",
+		Type: functionToolType,
 		Function: &llms.FunctionDefinition{
 			Name:        "getCurrentWeather",
 			Description: "Get the current weather in a given location",
@@ -38,7 +43,7 @@ func (wt *WeatherTool) LLMTool() *llms.Tool {
 	}
 }
 
-func (wt *WeatherTool) Call(toolCall *llms.ToolCall) llms.ToolCallResponse {
+func (wt *WeatherTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
 	var args struct {
 		Location string `json:"location"`
 		Unit     string `json:"unit"`

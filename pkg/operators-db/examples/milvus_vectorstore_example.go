@@ -1,4 +1,4 @@
-package operators_db
+package examples
 
 import (
 	"context"
@@ -24,7 +24,7 @@ func main() {
 }
 
 func newStore() (vectorstores.VectorStore, error) {
-	llm, err := openai.New(openai.WithBaseURL(baseURL))
+	llm, err := openai.New(openai.WithBaseURL("http://localhost:5500"))
 	if err != nil {
 		log.Fatal(err)
 	}

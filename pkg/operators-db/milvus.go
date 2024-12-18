@@ -10,14 +10,13 @@ import (
 	"github.com/tmc/langchaingo/embeddings"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/openai"
-	"log"
-
 	"github.com/tmc/langchaingo/vectorstores"
 	"github.com/tmc/langchaingo/vectorstores/milvus"
 )
 
 const (
-	baseURL = "http://localhost:5500"
+	baseURL  = "http://localhost:5500"
+	gptModel = "gpt-3.5-turbo-0125"
 )
 
 // MilvusStore implements OperatorsRetriever with Milvus as vector DB backend.
@@ -28,17 +27,17 @@ type MilvusStore struct {
 
 // NewMilvusStore creates a new MilvusStore instance.
 func NewMilvusStore(ctx context.Context, llm llms.Model) (OperatorsRetriever, error) {
-	openaiLLM, err := openai.New(openai.WithBaseURL(baseURL))
+	openaiLLM, err := openai.New(openai.WithModel(gptModel), openai.WithBaseURL(baseURL))
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("failed to create openai LLM: %w", err)
 	}
 	embedder, err := embeddings.NewEmbedder(openaiLLM)
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("failed to create embedder: %w", err)
 	}
 	idx, err := entity.NewIndexAUTOINDEX(entity.L2)
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("failed to create index: %w", err)
 	}
 
 	milvusConfig := client.Config{
@@ -64,7 +63,7 @@ func NewMilvusStore(ctx context.Context, llm llms.Model) (OperatorsRetriever, er
 	return &MilvusStore{
 		store: store,
 		retrievalChain: chains.NewRetrievalQAFromLLM(llm,
-			vectorstores.ToRetriever(store, 3, vectorstores.WithScoreThreshold(0.6))),
+			vectorstores.ToRetriever(store, 6, vectorstores.WithScoreThreshold(0.7))),
 	}, nil
 }
 
@@ -86,8 +85,8 @@ func (m *MilvusStore) Ask(ctx context.Context, prompt string) (string, error) {
 // RetrieveOperator retrieves the OperatorSchema of the operator that is
 // most relevant to the prompt.
 func (m *MilvusStore) RetrieveOperator(ctx context.Context, prompt string) (*OperatorSchema, error) {
-	templatedPrompt := fmt.Sprintf("What is the name of the operator that is most relevant to the following user"+
-		"prompt? /nUser prompt: %s", prompt)
+	templatedPrompt := fmt.Sprintf("What is the name of the operator that best addresses the needs described in "+
+		"the following user prompt? /nUser prompt: %s", prompt)
 	name, err := m.Ask(ctx, templatedPrompt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator name: %w", err)
