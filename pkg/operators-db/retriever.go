@@ -22,6 +22,6 @@ type OperatorSchema struct {
 	Categories []string `json:"categories"`
 	// Features of the operator.
 	Features []string `json:"features"`
-	// HelmSetup is the Helm setup for the operator.
-	HelmSetup []string `json:"helmSetup"`
+	// Setup contains the setup documentation for the operator.
+	Setup []string `json:"setup"`
 }

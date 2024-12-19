@@ -30,7 +30,7 @@ func getDocs() []schema.Document {
 						"Auto-rebalancing when scaling - Automatically rebalance the Kafka cluster after a scale-up or before a scale-down.",
 						"Monitoring - Built-in support for monitoring using Prometheus and provided Grafana dashboards",
 					},
-					HelmSetup: []string{
+					Setup: []string{
 						"helm repo add strimzi https://strimzi.io/charts",
 						"helm install my-strimzi-kafka-operator strimzi/strimzi-kafka-operator --version 0.44.0",
 					},
@@ -44,7 +44,7 @@ func getDocs() []schema.Document {
 						"Kubeflow is a community and ecosystem of open-source projects to address each stage in the machine learning (ML) lifecycle with support for best-in-class open source tools and frameworks. Kubeflow makes AI/ML on Kubernetes simple, portable, and scalable.",
 						"Whether you’re a researcher, data scientist, ML engineer, or a team of developers, Kubeflow offers modular and scalable tools that cater to all aspects of the ML lifecycle: from building ML models to deploying them to production for AI applications.",
 					},
-					HelmSetup: []string{},
+					Setup: []string{},
 				}}},
 		{PageContent: "RabbitMQ is an open source general-purpose message broker that is designed for consistent, highly-available messaging scenarios (both synchronous and asynchronous).",
 			Metadata: meta{
@@ -57,7 +57,7 @@ func getDocs() []schema.Document {
 						"Flexible: RabbitMQ provides many options you can combine to define how your messages go from the publisher to one or many consumers. Routing, filtering, streaming, federation, and so on, you name it.",
 						"Reliable: With the ability to acknowledge message delivery and to replicate messages across a cluster, you can ensure your messages are safe with RabbitMQ.",
 					},
-					HelmSetup: []string{},
+					Setup: []string{},
 				}}},
 		{PageContent: "The RocketMQ Operator manages the Apache RocketMQ service instances deployed on the Kubernetes cluster.",
 			Metadata: meta{
@@ -70,7 +70,7 @@ func getDocs() []schema.Document {
 						"Multi-cluster Support - Users can deploy and manage multiple RocketMQ name server clusters and broker clusters on a single Kubernetes cluster using RocketMQ Operator.",
 						"Topic Transfer - Operator can automatically migrate a specific topic from a source broker cluster to a target cluster without affecting the business.",
 					},
-					HelmSetup: []string{},
+					Setup: []string{},
 				}}},
 		{PageContent: "A Helm chart for creating a KubeStellar Core deployment on a Kubernetes or OpenShift cluster",
 			Metadata: meta{
@@ -81,7 +81,7 @@ func getDocs() []schema.Document {
 						"KubeStellar is a Cloud Native Computing Foundation (CNCF) Sandbox project that simplifies the deployment and configuration of applications across multiple Kubernetes clusters. It provides a seamless experience akin to using a single cluster, and it integrates with the tools you're already familiar with, eliminating the need to modify existing resources.",
 						"KubeStellar is particularly beneficial if you're currently deploying in a single cluster and are looking to expand to multiple clusters, or if you're already using multiple clusters and are seeking a more streamlined developer experience.",
 					},
-					HelmSetup: []string{},
+					Setup: []string{},
 				}}},
 	}
 

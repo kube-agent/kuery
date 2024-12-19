@@ -25,7 +25,7 @@ func (m *Manager) WithTool(tool Tool) *Manager {
 }
 
 // WithTools adds multiple tools to the manager.
-func (m *Manager) WithTools(tools ...Tool) *Manager {
+func (m *Manager) WithTools(tools []Tool) *Manager {
 	for _, tool := range tools {
 		m.tools[tool.Name()] = tool
 	}

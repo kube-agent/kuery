@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"fmt"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/openai"
 	"github.com/vMaroon/Kuery/pkg/flows"
@@ -10,7 +12,17 @@ import (
 	"github.com/vMaroon/Kuery/pkg/tools/imp"
 	"k8s.io/klog/v2"
 	"log"
+	"os"
 )
+
+const systemPrompt = `
+You are a kubernetes and cloud expert that is providing general-purpose assistance for users.
+You have access to cluster resources/APIs and sets of operators that can be deployed.
+
+Your access is granted through tool-calling capabilities that wrap APIs and RAG applications.
+
+You do not only suggest what the user can do, instead you propose doing it for them using the tools you have, after requesting permission.
+`
 
 func main() {
 	ctx := context.Background()
@@ -26,17 +38,20 @@ func main() {
 	toolsMgr := setupToolsMgr(ctx, llm)
 	logger.Info("Tools manager initialized")
 
-	flow := flows.NewConversationalFlow(llm, toolsMgr)
-	flow.HumanStep("I wish to add message streaming (or pub/sub) capabilities to my cluster. What should I do?")
+	flow := flows.NewConversationalFlow(systemPrompt, llm, toolsMgr)
+	flow.HumanStep(func(_ context.Context) string {
+		// I wish to add message streaming (or pub/sub) capabilities to my cluster. What should I do?
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Print("User Input: ")
+		text, _ := reader.ReadString('\n')
+		return text
+	})
 
 	logger.Info("Running flow")
-	history, err := flow.Run(ctx)
+	stopChan := make(chan struct{})
+	_, err = flow.Loop(ctx, stopChan)
 	if err != nil {
-		logger.Error(err, "failed to run flow")
-	}
-
-	for _, msg := range history {
-		logger.Info("Step", "role", msg.Role, "content", msg.Parts)
+		logger.Error(err, "Failed to loop flow")
 	}
 }
 
@@ -46,7 +61,12 @@ func setupToolsMgr(ctx context.Context, llm llms.Model) *tools.Manager {
 		log.Fatal(err)
 	}
 
-	return tools.NewManager().WithTool(&imp.OperatorsTool{
-		OperatorsRetriever: operatorsRetriever,
+	return tools.NewManager().WithTools([]tools.Tool{
+		&imp.OperatorsTool{
+			OperatorsRetriever: operatorsRetriever,
+		},
+		&imp.K8sCRDsClient{},
+		&imp.K8sDynamicClient{},
+		&imp.HelmTool{},
 	})
 }
