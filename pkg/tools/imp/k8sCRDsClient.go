@@ -11,7 +11,7 @@ import (
 
 // K8sCRDsClient implements the Tool interface for the Kubernetes API over CRDs.
 type K8sCRDsClient struct {
-	client *apiextensionsclientset.Clientset
+	Client *apiextensionsclientset.Clientset
 }
 
 // Name returns the name of the tool.
@@ -78,20 +78,20 @@ func (k *K8sCRDsClient) Call(ctx context.Context, toolCall *llms.ToolCall) llms.
 
 // interactWithK8sCRDs interacts with the Kubernetes API over CRDs.
 func (k *K8sCRDsClient) interactWithK8sCRDs(ctx context.Context, operation, name string) (string, error) {
-	if k.client == nil {
+	if k.Client == nil {
 		return "", fmt.Errorf("kubernetes client is not initialized")
 	}
 
 	switch operation {
 	case "GET":
-		crd, err := k.client.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, name, metav1.GetOptions{})
+		crd, err := k.Client.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			return "", fmt.Errorf("failed to get CRD (name=%s): %w", name, err)
 		}
 
 		return fmt.Sprintf("%v", crd), nil
 	case "LIST":
-		crds, err := k.client.ApiextensionsV1().CustomResourceDefinitions().List(ctx, metav1.ListOptions{})
+		crds, err := k.Client.ApiextensionsV1().CustomResourceDefinitions().List(ctx, metav1.ListOptions{})
 		if err != nil {
 			return "", fmt.Errorf("failed to list CRDs: %w", err)
 		}

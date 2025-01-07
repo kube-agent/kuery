@@ -10,9 +10,13 @@ import (
 	operators_db "github.com/vMaroon/Kuery/pkg/operators-db"
 	"github.com/vMaroon/Kuery/pkg/tools"
 	"github.com/vMaroon/Kuery/pkg/tools/imp"
+	"k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
 	"log"
 	"os"
+
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 const systemPrompt = `
@@ -62,12 +66,28 @@ func setupToolsMgr(ctx context.Context, llm llms.Model) *tools.Manager {
 		log.Fatal(err)
 	}
 
+	cfg := ctrl.GetConfigOrDie()
+
+	kubeClient, err := clientset.NewForConfig(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dynamicKubeClient, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	return tools.NewManager().WithTools([]tools.Tool{
 		&imp.OperatorsRAGTool{
 			OperatorsRetriever: operatorsRetriever,
 		},
-		&imp.K8sCRDsClient{},
-		&imp.K8sDynamicClient{},
+		&imp.K8sCRDsClient{
+			Client: kubeClient,
+		},
+		&imp.K8sDynamicClient{
+			Client: dynamicKubeClient,
+		},
 		&imp.HelmTool{},
 	})
 }

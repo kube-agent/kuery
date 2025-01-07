@@ -13,7 +13,7 @@ import (
 
 // K8sDynamicClient implements the Tool interface for the K8s dynamic client.
 type K8sDynamicClient struct {
-	client dynamic.Interface
+	Client dynamic.Interface
 }
 
 // Name returns the name of the tool.
@@ -35,7 +35,7 @@ func (k *K8sDynamicClient) LLMTool() *llms.Tool {
 						"type": "string",
 						"description": `The operation to perform: LIST, GET, POST, PUT, DELETE
 										List resources, get a resource by name, create a resource, update a resource, delete a resource.
-										If unsure about the object identification (GVR+namespacedName), use LIST to deletage task to a future call.
+										If unsure about the object identification (GVR+namespacedName), use LIST to delegate task to a future call.
 										When the intent is to update a resource, use GET to retrieve the resource and then PUT to update it.`,
 					},
 					"group": map[string]any{
@@ -118,7 +118,7 @@ func (k *K8sDynamicClient) Call(ctx context.Context, toolCall *llms.ToolCall) ll
 
 // interactWithClient interacts with the Kubernetes API using the go client.
 func (k *K8sDynamicClient) interactWithClient(ctx context.Context, operation string, args dynamicCallArgs) (string, error) {
-	if k.client == nil {
+	if k.Client == nil {
 		return "", fmt.Errorf("kubernetes client is not initialized")
 	}
 
@@ -128,13 +128,13 @@ func (k *K8sDynamicClient) interactWithClient(ctx context.Context, operation str
 		var err error
 
 		if args.Namespace == metav1.NamespaceNone {
-			unstructuredObj, err = k.client.Resource(schema.GroupVersionResource{
+			unstructuredObj, err = k.Client.Resource(schema.GroupVersionResource{
 				Group:    args.Group,
 				Version:  args.Version,
 				Resource: args.Resource,
 			}).Get(ctx, args.Name, metav1.GetOptions{})
 		} else {
-			unstructuredObj, err = k.client.Resource(schema.GroupVersionResource{
+			unstructuredObj, err = k.Client.Resource(schema.GroupVersionResource{
 				Group:    args.Group,
 				Version:  args.Version,
 				Resource: args.Resource,

@@ -3,6 +3,8 @@ package flows
 import (
 	"context"
 	"fmt"
+	"github.com/fatih/color"
+	"github.com/kr/pretty"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/vMaroon/Kuery/pkg/flows/steps"
 	"github.com/vMaroon/Kuery/pkg/tools"
@@ -120,14 +122,18 @@ func (f *ConversationalFlow) getTools() []llms.Tool {
 }
 
 func appendHistory(ctx context.Context, history []llms.MessageContent, msg llms.MessageContent) []llms.MessageContent {
-	logger := klog.FromContext(ctx)
-
-	if msg.Role == "tool" {
-		logger.V(3).Info("Tool", "content", msg.Parts)
-	} else {
-		logger.Info(string(msg.Role), "content", msg.Parts)
+	c := color.New(color.FgWhite)
+	switch msg.Role {
+	case llms.ChatMessageTypeSystem:
+	case llms.ChatMessageTypeAI:
+		c = color.New(color.FgCyan)
+	case llms.ChatMessageTypeHuman:
+		c = color.New(color.FgGreen)
+	case llms.ChatMessageTypeTool:
+		c = color.New(color.FgYellow)
 	}
 
+	c.Println(pretty.Sprintf("[%s]: %s", msg.Role, msg.Parts))
 	history = append(history, msg)
 	return history
 }
