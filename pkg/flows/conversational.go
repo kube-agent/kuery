@@ -12,7 +12,7 @@ import (
 // ConversationalFlow implements flow for pure-conversation flows.
 type ConversationalFlow struct {
 	llm     llms.Model
-	steps   []steps.Step
+	chain   Chain
 	toolMgr *tools.Manager
 
 	systemPrompt string
@@ -22,6 +22,7 @@ type ConversationalFlow struct {
 func NewConversationalFlow(systemPrompt string, llm llms.Model, toolMgr *tools.Manager) *ConversationalFlow {
 	return &ConversationalFlow{
 		llm:          llm,
+		chain:        NewChain(nil),
 		toolMgr:      toolMgr,
 		systemPrompt: systemPrompt,
 	}
@@ -36,11 +37,12 @@ func (f *ConversationalFlow) Once(ctx context.Context) ([]llms.MessageContent, e
 			[]string{f.systemPrompt}...))
 	}
 
+	f.chain.Reset()
 	return f.execute(ctx, history)
 }
 
-// Loop executes the flow in a loop until the stop channel is closed.
-func (f *ConversationalFlow) Loop(ctx context.Context, stopChan chan struct{}) ([]llms.MessageContent, error) {
+// Loop executes the flow in a loop until the context is done.
+func (f *ConversationalFlow) Loop(ctx context.Context) ([]llms.MessageContent, error) {
 	history := make([]llms.MessageContent, 0)
 
 	if f.systemPrompt != "" {
@@ -50,9 +52,10 @@ func (f *ConversationalFlow) Loop(ctx context.Context, stopChan chan struct{}) (
 
 	for {
 		select {
-		case <-stopChan:
+		case <-ctx.Done():
 			return history, nil
 		default:
+			f.chain.Reset()
 			executionHistory, err := f.execute(ctx, history)
 			history = executionHistory
 			if err != nil {
@@ -64,31 +67,34 @@ func (f *ConversationalFlow) Loop(ctx context.Context, stopChan chan struct{}) (
 
 func (f *ConversationalFlow) execute(ctx context.Context,
 	history []llms.MessageContent) ([]llms.MessageContent, error) {
-	for i, step := range f.steps {
+	logger := klog.FromContext(ctx)
+	// iterate over chn.Next() until nil
+	for {
+		step := f.chain.Next()
+		if step == nil {
+			break
+		}
+
 		response, err := step.
-			WithHistory(history, true).
-			WithCallOptions([]llms.CallOption{llms.WithTools(f.toolMgr.GetLLMTools())}).
+			WithHistory(history, false).
+			WithCallOptions([]llms.CallOption{llms.WithTools(f.getTools())}).
 			Execute(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute step %d: %w", i, err)
+			return nil, fmt.Errorf("failed to execute step: %w", err)
 		}
 
 		history = appendHistory(ctx, history, step.ToMessageContent(response))
 		// execute tool calls (if any) and add to history
 		toolsUsed := false
-		for _, msg := range f.toolMgr.ExecuteToolCalls(ctx, response) {
+		for _, msg := range f.toolMgr.ExecuteToolCalls(ctx, response) { // this could potentially add a step
+			logger.V(4).Info("Tool Used", "content", msg.Parts)
 			history = appendHistory(ctx, history, msg)
 			toolsUsed = true
 		}
 
 		if toolsUsed { // add AI step to answer
-			clarificationStep := steps.NewLLMStep(f.llm).WithHistory(history, true)
-			response, err := clarificationStep.Execute(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("failed to execute AI step after tool calls: %w", err)
-			}
-
-			history = appendHistory(ctx, history, clarificationStep.ToMessageContent(response))
+			logger.V(4).Info("Added AI Step")
+			f.chain.PushNext(steps.NewLLMStep(f.llm), true)
 		}
 	}
 
@@ -96,16 +102,31 @@ func (f *ConversationalFlow) execute(ctx context.Context,
 }
 
 func (f *ConversationalFlow) HumanStep(getter func(ctx context.Context) string) *ConversationalFlow {
-	f.steps = append(f.steps, steps.NewHumanStep(getter))
-	// also append an AI step to answer
-	f.steps = append(f.steps, steps.NewLLMStep(f.llm))
+	f.chain.Push([]steps.Step{
+		steps.NewHumanStep(getter),
+		steps.NewLLMStep(f.llm), // add AI step to answer
+	})
 
 	return f
 }
 
+func (f *ConversationalFlow) getTools() []llms.Tool {
+	planner := plannerTool{
+		chain: f.chain,
+		llm:   f.llm,
+	}
+
+	return append(f.toolMgr.GetLLMTools(), *planner.LLMTool())
+}
+
 func appendHistory(ctx context.Context, history []llms.MessageContent, msg llms.MessageContent) []llms.MessageContent {
 	logger := klog.FromContext(ctx)
-	logger.Info("Step", "role", msg.Role, "content", msg.Parts)
+
+	if msg.Role == "tool" {
+		logger.V(3).Info("Tool", "content", msg.Parts)
+	} else {
+		logger.Info(string(msg.Role), "content", msg.Parts)
+	}
 
 	history = append(history, msg)
 	return history

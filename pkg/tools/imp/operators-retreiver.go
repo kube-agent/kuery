@@ -8,21 +8,23 @@ import (
 	operators_db "github.com/vMaroon/Kuery/pkg/operators-db"
 )
 
-// OperatorsTool is a tool that retrieves the operator schema that is most relevant to the prompt.
-type OperatorsTool struct {
+// OperatorsRAGTool is a tool that retrieves the operator schema that is most relevant to the prompt.
+type OperatorsRAGTool struct {
 	operators_db.OperatorsRetriever
 }
 
-func (ot *OperatorsTool) Name() string {
-	return "retrieveOperatorByRelevance"
+func (ort *OperatorsRAGTool) Name() string {
+	return "operatorsRAGTool"
 }
 
-func (ot *OperatorsTool) LLMTool() *llms.Tool {
+func (ort *OperatorsRAGTool) LLMTool() *llms.Tool {
 	return &llms.Tool{
 		Type: functionToolType,
 		Function: &llms.FunctionDefinition{
-			Name:        "retrieveOperatorByRelevance",
-			Description: "Retrieve the operator schema that is most relevant to the prompt",
+			Name: "operatorsRAGTool",
+			Description: `Retrieve the operator information that is most relevant to the prompt
+						  This tool is used to retrieve kubernetes operators information before answering a relevant user prompt.
+						  This tool should be used before generating answers from nothing.`,
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -37,10 +39,11 @@ func (ot *OperatorsTool) LLMTool() *llms.Tool {
 	}
 }
 
-func (ot *OperatorsTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
+func (ort *OperatorsRAGTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
 	var args struct {
 		Prompt string `json:"prompt"`
 	}
+
 	if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
 		return llms.ToolCallResponse{
 			ToolCallID: toolCall.ID,
@@ -49,7 +52,7 @@ func (ot *OperatorsTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms
 		}
 	}
 
-	schema, err := ot.RetrieveOperator(ctx, args.Prompt)
+	schema, err := ort.RetrieveOperator(ctx, args.Prompt)
 	if err != nil {
 		return llms.ToolCallResponse{
 			ToolCallID: toolCall.ID,
@@ -61,6 +64,6 @@ func (ot *OperatorsTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms
 	return llms.ToolCallResponse{
 		ToolCallID: toolCall.ID,
 		Name:       toolCall.FunctionCall.Name,
-		Content:    schema.Name,
+		Content:    fmt.Sprintf("Name: %s\nFeatures:%s", schema.Name, schema.Features),
 	}
 }

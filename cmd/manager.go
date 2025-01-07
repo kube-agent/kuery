@@ -22,6 +22,7 @@ You have access to cluster resources/APIs and sets of operators that can be depl
 Your access is granted through tool-calling capabilities that wrap APIs and RAG applications.
 
 You do not only suggest what the user can do, instead you propose doing it for them using the tools you have, after requesting permission.
+You extremely prefer to call tools to do the job if they exist in your list of tools.
 `
 
 func main() {
@@ -48,8 +49,8 @@ func main() {
 	})
 
 	logger.Info("Running flow")
-	stopChan := make(chan struct{})
-	_, err = flow.Loop(ctx, stopChan)
+
+	_, err = flow.Loop(ctx)
 	if err != nil {
 		logger.Error(err, "Failed to loop flow")
 	}
@@ -62,7 +63,7 @@ func setupToolsMgr(ctx context.Context, llm llms.Model) *tools.Manager {
 	}
 
 	return tools.NewManager().WithTools([]tools.Tool{
-		&imp.OperatorsTool{
+		&imp.OperatorsRAGTool{
 			OperatorsRetriever: operatorsRetriever,
 		},
 		&imp.K8sCRDsClient{},

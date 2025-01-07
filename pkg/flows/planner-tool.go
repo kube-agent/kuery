@@ -1,27 +1,26 @@
-package imp
+package flows
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/tmc/langchaingo/llms"
-	"github.com/vMaroon/Kuery/pkg/flows"
 	"github.com/vMaroon/Kuery/pkg/flows/steps"
 )
 
-// PlannerTool is a tool that can add a step of planning to a given chain.
-type PlannerTool struct {
-	Chain flows.Chain
-	Model llms.Model
+// plannerTool is a tool that can add a step of planning to a given chain.
+type plannerTool struct {
+	chain Chain
+	llm   llms.Model
 }
 
-func (p *PlannerTool) Name() string {
+func (p *plannerTool) Name() string {
 	return "plannerTool"
 }
 
-func (p *PlannerTool) LLMTool() *llms.Tool {
+func (p *plannerTool) LLMTool() *llms.Tool {
 	return &llms.Tool{
-		Type: functionToolType,
+		Type: "function",
 		Function: &llms.FunctionDefinition{
 			Name: "addPlanningStep",
 			Description: `Extend the conversation flow with a planning step.
@@ -41,7 +40,7 @@ func (p *PlannerTool) LLMTool() *llms.Tool {
 	}
 }
 
-func (p *PlannerTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
+func (p *plannerTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
 	var args struct {
 		Prompt string `json:"prompt"`
 	}
@@ -53,7 +52,7 @@ func (p *PlannerTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.To
 		}
 	}
 
-	if p.Chain == nil || p.Model == nil {
+	if p.chain == nil || p.llm == nil {
 		return llms.ToolCallResponse{
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
@@ -61,10 +60,10 @@ func (p *PlannerTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.To
 		}
 	}
 
-	step := steps.NewLLMStep(p.Model).WithHistory([]llms.MessageContent{
+	step := steps.NewLLMStep(p.llm).WithHistory([]llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeAI, args.Prompt),
 	}, false)
-	p.Chain.PushNext(step, true) // has to be true because the prompt would reset on chain::Reset
+	p.chain.PushNext(step, true) // has to be true because the prompt would reset on chain::Reset
 
 	return llms.ToolCallResponse{
 		ToolCallID: toolCall.ID,

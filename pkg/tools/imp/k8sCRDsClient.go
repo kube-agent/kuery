@@ -30,15 +30,17 @@ func (k *K8sCRDsClient) LLMTool() *llms.Tool {
 				"type": "object",
 				"properties": map[string]any{
 					"operation": map[string]any{
-						"type":        "string",
-						"description": "The operation to perform: GET", // enough for now
+						"type": "string",
+						"description": `The operation to perform: GET, LIST.
+										Get a CRD by name or list all CRDs.
+										If unsure about the resource field, use LIST and delegate task to a future call.`,
 					},
-					"resource": map[string]any{
+					"name": map[string]any{
 						"type":        "string",
-						"description": "The JSON representation of the resource (metav1.Object) to interact with",
+						"description": `The name of the CRD to interact with, or empty for LIST.`,
 					},
 				},
-				"required": []string{"operation", "resource"},
+				"required": []string{"operation", "name"},
 			},
 		},
 	}
@@ -48,7 +50,7 @@ func (k *K8sCRDsClient) LLMTool() *llms.Tool {
 func (k *K8sCRDsClient) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
 	var args struct {
 		Operation string `json:"operation"`
-		Resource  string `json:"resource"`
+		Name      string `json:"name"`
 	}
 	if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
 		return llms.ToolCallResponse{
@@ -58,7 +60,7 @@ func (k *K8sCRDsClient) Call(ctx context.Context, toolCall *llms.ToolCall) llms.
 		}
 	}
 
-	response, err := k.interactWithK8sCRDs(ctx, args.Operation, args.Resource)
+	response, err := k.interactWithK8sCRDs(ctx, args.Operation, args.Name)
 	if err != nil {
 		return llms.ToolCallResponse{
 			ToolCallID: toolCall.ID,
@@ -75,30 +77,26 @@ func (k *K8sCRDsClient) Call(ctx context.Context, toolCall *llms.ToolCall) llms.
 }
 
 // interactWithK8sCRDs interacts with the Kubernetes API over CRDs.
-func (k *K8sCRDsClient) interactWithK8sCRDs(ctx context.Context, operation, resource string) (string, error) {
+func (k *K8sCRDsClient) interactWithK8sCRDs(ctx context.Context, operation, name string) (string, error) {
 	if k.client == nil {
 		return "", fmt.Errorf("kubernetes client is not initialized")
 	}
 
-	marshalledResource, err := json.Marshal(resource)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal resource (%v): %w", resource, err)
-	}
-
-	var metaObject metav1.Object
-	if err := json.Unmarshal(marshalledResource, &metaObject); err != nil {
-		return "", fmt.Errorf("failed to unmarshal resource (%v): %w", resource, err)
-	}
-
 	switch operation {
 	case "GET":
-		crd, err := k.client.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, metaObject.GetName(),
-			metav1.GetOptions{})
+		crd, err := k.client.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
-			return "", fmt.Errorf("failed to get CRD (resource=%v): %w", resource, err)
+			return "", fmt.Errorf("failed to get CRD (name=%s): %w", name, err)
 		}
 
 		return fmt.Sprintf("%v", crd), nil
+	case "LIST":
+		crds, err := k.client.ApiextensionsV1().CustomResourceDefinitions().List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return "", fmt.Errorf("failed to list CRDs: %w", err)
+		}
+
+		return fmt.Sprintf("%v", crds), nil
 	}
 
 	return "", fmt.Errorf("unsupported operation: %v", operation)
