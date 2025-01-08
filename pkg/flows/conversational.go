@@ -136,7 +136,20 @@ func appendHistory(ctx context.Context, history []llms.MessageContent, msg llms.
 		c = color.New(color.FgRed)
 	}
 
-	c.Println(pretty.Sprintf("[%s]: %s", msg.Role, msg.Parts))
+	// if tool, trim parts
+	if msg.Role == llms.ChatMessageTypeTool {
+		c.Println(slicedString(pretty.Sprintf("[%s]: %s", msg.Role, msg.Parts), 250))
+	} else {
+		c.Println(pretty.Sprintf("[%s]: %s", msg.Role, msg.Parts))
+	}
+
 	history = append(history, msg)
 	return history
+}
+
+func slicedString(str string, length int) string {
+	if len(str) > length {
+		return str[:length] + "..."
+	}
+	return str
 }

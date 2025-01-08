@@ -36,6 +36,11 @@ func (k *K8sDynamicClient) LLMTool() *llms.Tool {
 					"operation": map[string]any{
 						"type": "string",
 						"description": `The operation to perform: LIST, GET, POST, PUT, DELETE
+										LIST: List resources.
+										GET: Get a resource by name.	
+										POST: Create a resource. When using POST, you can skip identification fields (except for NS if needed).
+										PUT: Update a resource. When using PUT, you can skip identification fields (except for NS if needed).
+										DELETE: Delete a resource.
 										List resources, get a resource by name, create a resource, update a resource, delete a resource.
 										If unsure about the object identification (GVR+namespacedName), use LIST to delegate task to a future call.
 										When the intent is to update a resource, use GET to retrieve the resource and then PUT to update it.`,
@@ -60,19 +65,9 @@ func (k *K8sDynamicClient) LLMTool() *llms.Tool {
 						"type":        "string",
 						"description": `The namespace of the resource to interact with, or empty for LIST.`,
 					},
-					"changes": map[string]any{
-						"type":        "object",
-						"description": `The spec/metadata changes to apply as-is. This would fully replace the existing spec/metadata.`,
-						"properties": map[string]any{
-							"spec": map[string]any{
-								"type":        "object",
-								"description": `The spec changes to apply as-is. This would fully replace the existing spec.`,
-							},
-							"metadata": map[string]any{
-								"type":        "object",
-								"description": `The metadata changes to apply as-is. This would fully replace the existing metadata.`,
-							},
-						},
+					"object": map[string]any{
+						"type":        "string",
+						"description": `The object to create or update. This should be a JSON object that can be used as-is.`,
 					},
 				},
 				"required": []string{"operation", "group", "version", "resource", "name", "namespace"},
@@ -88,6 +83,8 @@ type dynamicCallArgs struct {
 	Resource  string `json:"resource"`
 	Name      string `json:"name"`
 	Namespace string `json:"namespace"`
+
+	Object string `json:"object"`
 }
 
 // Call executes the tool call and returns the response.
@@ -172,6 +169,33 @@ func (k *K8sDynamicClient) interactWithClient(ctx context.Context, operation str
 		}
 
 		return fmt.Sprintf("%v", unstructuredList), nil
+	case "POST":
+		var err error
+		var unstructuredObj *unstructured.Unstructured
+
+		if err := json.Unmarshal([]byte(args.Object), &unstructuredObj); err != nil {
+			return "", fmt.Errorf("failed to unmarshal object: %w", err)
+		}
+
+		if args.Namespace == metav1.NamespaceNone {
+			unstructuredObj, err = k.Client.Resource(schema.GroupVersionResource{
+				Group:    args.Group,
+				Version:  args.Version,
+				Resource: args.Resource,
+			}).Create(ctx, unstructuredObj, metav1.CreateOptions{})
+		} else {
+			unstructuredObj, err = k.Client.Resource(schema.GroupVersionResource{
+				Group:    args.Group,
+				Version:  args.Version,
+				Resource: args.Resource,
+			}).Namespace(args.Namespace).Create(ctx, unstructuredObj, metav1.CreateOptions{})
+		}
+
+		if err != nil {
+			return "", fmt.Errorf("failed to create resource: %w", err)
+		}
+
+		return fmt.Sprintf("%v", unstructuredObj), nil
 	}
 
 	return "", fmt.Errorf("unsupported operation: %v", operation)
