@@ -23,7 +23,7 @@ func (wt *WeatherTool) LLMTool() *llms.Tool {
 	return &llms.Tool{
 		Type: functionToolType,
 		Function: &llms.FunctionDefinition{
-			Name:        "getCurrentWeather",
+			Name:        wt.Name(),
 			Description: "Get the current weather in a given location",
 			Parameters: map[string]any{
 				"type": "object",

@@ -18,7 +18,7 @@ type K8sDynamicClient struct {
 
 // Name returns the name of the tool.
 func (k *K8sDynamicClient) Name() string {
-	return "K8sClient"
+	return "K8sDynamicClient"
 }
 
 // LLMTool returns the tool as an LLM tool.
@@ -26,7 +26,7 @@ func (k *K8sDynamicClient) LLMTool() *llms.Tool {
 	return &llms.Tool{
 		Type: functionToolType,
 		Function: &llms.FunctionDefinition{
-			Name: "K8sDynamicClient",
+			Name: k.Name(),
 			Description: `Interact with Kubernetes Cluster.
 						  This tool should be used when the user wants to interact with the Kubernetes cluster.
 							This tool should be used with clear user intent.`,
@@ -149,6 +149,29 @@ func (k *K8sDynamicClient) interactWithClient(ctx context.Context, operation str
 		}
 
 		return fmt.Sprintf("%v", unstructuredObj), nil
+	case "LIST":
+		var unstructuredList *unstructured.UnstructuredList
+		var err error
+
+		if args.Namespace == metav1.NamespaceNone {
+			unstructuredList, err = k.Client.Resource(schema.GroupVersionResource{
+				Group:    args.Group,
+				Version:  args.Version,
+				Resource: args.Resource,
+			}).List(ctx, metav1.ListOptions{})
+		} else {
+			unstructuredList, err = k.Client.Resource(schema.GroupVersionResource{
+				Group:    args.Group,
+				Version:  args.Version,
+				Resource: args.Resource,
+			}).Namespace(args.Namespace).List(ctx, metav1.ListOptions{})
+		}
+
+		if err != nil {
+			return "", fmt.Errorf("failed to list resources: %w", err)
+		}
+
+		return fmt.Sprintf("%v", unstructuredList), nil
 	}
 
 	return "", fmt.Errorf("unsupported operation: %v", operation)

@@ -21,7 +21,7 @@ func (ort *OperatorsRAGTool) LLMTool() *llms.Tool {
 	return &llms.Tool{
 		Type: functionToolType,
 		Function: &llms.FunctionDefinition{
-			Name: "operatorsRAGTool",
+			Name: ort.Name(),
 			Description: `Retrieve the operator information that is most relevant to the prompt.
 						  This tool is used to retrieve kubernetes operators information before answering a relevant user prompt.
 						  This tool should be used before generating answers from nothing. Do not over-use with the same prompt.`,

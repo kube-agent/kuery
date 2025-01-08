@@ -18,7 +18,7 @@ func (ht *HelmTool) LLMTool() *llms.Tool {
 	return &llms.Tool{
 		Type: functionToolType,
 		Function: &llms.FunctionDefinition{
-			Name: "helmTool",
+			Name: ht.Name(),
 			Description: "Interact with Helm. Install, upgrade, delete, etc." +
 				"This tool should be used with clear user intent.",
 			Parameters: map[string]any{

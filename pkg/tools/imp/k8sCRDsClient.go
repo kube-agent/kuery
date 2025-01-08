@@ -24,7 +24,7 @@ func (k *K8sCRDsClient) LLMTool() *llms.Tool {
 	return &llms.Tool{
 		Type: functionToolType,
 		Function: &llms.FunctionDefinition{
-			Name: "K8sCRDsClient",
+			Name: k.Name(),
 			Description: `Interact with Kubernetes Cluster over CRD resources.
 						  This tool should be used when the user wants to interact with the Kubernetes cluster, specifically with CRD resources.
 							This tool should be used with clear user intent.`,
