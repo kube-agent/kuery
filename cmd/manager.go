@@ -1,12 +1,11 @@
 package main
 
 import (
-	"bufio"
 	"context"
-	"fmt"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/openai"
 	"github.com/vMaroon/Kuery/pkg/flows"
+	"github.com/vMaroon/Kuery/pkg/flows/steps"
 	operators_db "github.com/vMaroon/Kuery/pkg/operators-db"
 	"github.com/vMaroon/Kuery/pkg/tools"
 	"github.com/vMaroon/Kuery/pkg/tools/imp"
@@ -14,8 +13,6 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
 	"log"
-	"os"
-
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -31,7 +28,9 @@ You extremely prefer to call tools to do the job if they exist in your list of t
 
 func main() {
 	ctx := context.Background()
+	// init verbosity flag
 	klog.InitFlags(nil)
+
 	logger := klog.FromContext(ctx)
 
 	llm, err := openai.New()
@@ -44,13 +43,10 @@ func main() {
 	logger.Info("Tools manager initialized")
 
 	flow := flows.NewConversationalFlow(systemPrompt, llm, toolsMgr)
-	flow.HumanStep(func(_ context.Context) string {
-		// I wish to add message streaming (or pub/sub) capabilities to my cluster. What should I do?
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("User Input: ")
-		text, _ := reader.ReadString('\n')
-		return text
-	})
+	// Sample human step of a user that has a cluster with several services and the need for a high performance message
+	// bus operator:
+	// I have a cluster with several services and I think I need a high performance message bus operator for event-driven communication.
+	flow.HumanStep(steps.ReadFromSTDIN)
 
 	logger.Info("Running flow")
 

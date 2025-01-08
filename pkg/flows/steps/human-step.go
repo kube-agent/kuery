@@ -1,8 +1,11 @@
 package steps
 
 import (
+	"bufio"
 	"context"
+	"fmt"
 	"github.com/tmc/langchaingo/llms"
+	"os"
 )
 
 // HumanStep is a step that represents a human step in a flow.
@@ -48,4 +51,13 @@ func (s *HumanStep) WithHistory(history []llms.MessageContent, replace bool) Ste
 func (s *HumanStep) WithCallOptions(callOptions []llms.CallOption) Step {
 	// Human steps do not have call options.
 	return s
+}
+
+// ReadFromSTDIN reads a string from the standard input.
+func ReadFromSTDIN(_ context.Context) string {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("User Input: ")
+	text, _ := reader.ReadString('\n')
+
+	return text[:len(text)-1] // remove the newline character
 }

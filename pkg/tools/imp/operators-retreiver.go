@@ -22,15 +22,17 @@ func (ort *OperatorsRAGTool) LLMTool() *llms.Tool {
 		Type: functionToolType,
 		Function: &llms.FunctionDefinition{
 			Name: "operatorsRAGTool",
-			Description: `Retrieve the operator information that is most relevant to the prompt
+			Description: `Retrieve the operator information that is most relevant to the prompt.
 						  This tool is used to retrieve kubernetes operators information before answering a relevant user prompt.
-						  This tool should be used before generating answers from nothing.`,
+						  This tool should be used before generating answers from nothing. Do not over-use with the same prompt.`,
+
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"prompt": map[string]interface{}{
-						"type":        "string",
-						"description": "The prompt to retrieve the operator schema for",
+						"type": "string",
+						"description": `The prompt to retrieve the operator schemas for.
+										This prompt should be generalized and enhanced by you for best results.`,
 					},
 				},
 				"required": []string{"prompt"},
@@ -52,18 +54,18 @@ func (ort *OperatorsRAGTool) Call(ctx context.Context, toolCall *llms.ToolCall) 
 		}
 	}
 
-	schema, err := ort.RetrieveOperator(ctx, args.Prompt)
+	schemas, err := ort.RetrieveOperators(ctx, args.Prompt)
 	if err != nil {
 		return llms.ToolCallResponse{
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
-			Content:    fmt.Sprintf("failed to get current weather: %v", err),
+			Content:    fmt.Sprintf("failed to get relevant operators: %v", err),
 		}
 	}
 
 	return llms.ToolCallResponse{
 		ToolCallID: toolCall.ID,
 		Name:       toolCall.FunctionCall.Name,
-		Content:    fmt.Sprintf("Name: %s\nFeatures:%s", schema.Name, schema.Features),
+		Content:    operators_db.OperatorSchemasToString(schemas),
 	}
 }

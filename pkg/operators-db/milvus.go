@@ -12,6 +12,7 @@ import (
 	"github.com/tmc/langchaingo/llms/openai"
 	"github.com/tmc/langchaingo/vectorstores"
 	"github.com/tmc/langchaingo/vectorstores/milvus"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -82,26 +83,29 @@ func (m *MilvusStore) Ask(ctx context.Context, prompt string) (string, error) {
 	return result, nil
 }
 
-// RetrieveOperator retrieves the OperatorSchema of the operator that is
+// RetrieveOperators retrieves the OperatorSchema of the operators that are
 // most relevant to the prompt.
-func (m *MilvusStore) RetrieveOperator(ctx context.Context, prompt string) (*OperatorSchema, error) {
-	templatedPrompt := fmt.Sprintf("What is the name of the operator that best addresses the needs described in "+
-		"the following user prompt? /nUser prompt: %s", prompt)
-	name, err := m.Ask(ctx, templatedPrompt)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get operator name: %w", err)
-	}
-
-	docs, err := m.store.SimilaritySearch(ctx, name, 1, vectorstores.WithScoreThreshold(0.8))
+func (m *MilvusStore) RetrieveOperators(ctx context.Context, prompt string) ([]OperatorSchema, error) {
+	docs, err := m.store.SimilaritySearch(ctx, prompt, 3,
+		vectorstores.WithScoreThreshold(0.8))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get relevant documents: %w", err)
 	}
 
-	if len(docs) == 0 {
-		return nil, nil
+	var schemas []OperatorSchema
+	logger := klog.FromContext(ctx)
+
+	for _, doc := range docs {
+		schema, err := unstructuredMapToOperatorSchema(doc.Metadata["schema"].(map[string]interface{}))
+		if err != nil {
+			logger.Error(err, "failed to convert unstructured map to operator schema")
+			continue
+		}
+
+		schemas = append(schemas, *schema)
 	}
 
-	return unstructuredMapToOperatorSchema(docs[0].Metadata["schema"].(map[string]interface{}))
+	return schemas, nil
 }
 
 func populateDocs(ctx context.Context, store vectorstores.VectorStore) error {

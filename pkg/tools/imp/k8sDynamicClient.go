@@ -26,8 +26,10 @@ func (k *K8sDynamicClient) LLMTool() *llms.Tool {
 	return &llms.Tool{
 		Type: functionToolType,
 		Function: &llms.FunctionDefinition{
-			Name:        "K8sDynamicClient",
-			Description: "Interact with Kubernetes API goclient.",
+			Name: "K8sDynamicClient",
+			Description: `Interact with Kubernetes Cluster.
+						  This tool should be used when the user wants to interact with the Kubernetes cluster.
+							This tool should be used with clear user intent.`,
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{

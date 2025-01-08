@@ -78,7 +78,7 @@ func (f *ConversationalFlow) execute(ctx context.Context,
 		}
 
 		response, err := step.
-			WithHistory(history, false).
+			WithHistory(history, true).
 			WithCallOptions([]llms.CallOption{llms.WithTools(f.getTools())}).
 			Execute(ctx)
 		if err != nil {
@@ -103,6 +103,8 @@ func (f *ConversationalFlow) execute(ctx context.Context,
 	return history, nil
 }
 
+// HumanStep appends a human-driven step to the flow. The addition of the step
+// will be followed by an AI step to answer.
 func (f *ConversationalFlow) HumanStep(getter func(ctx context.Context) string) *ConversationalFlow {
 	f.chain.Push([]steps.Step{
 		steps.NewHumanStep(getter),
@@ -122,15 +124,16 @@ func (f *ConversationalFlow) getTools() []llms.Tool {
 }
 
 func appendHistory(ctx context.Context, history []llms.MessageContent, msg llms.MessageContent) []llms.MessageContent {
-	c := color.New(color.FgWhite)
+	c := color.New(color.FgHiWhite)
 	switch msg.Role {
 	case llms.ChatMessageTypeSystem:
+		fallthrough
 	case llms.ChatMessageTypeAI:
 		c = color.New(color.FgCyan)
 	case llms.ChatMessageTypeHuman:
 		c = color.New(color.FgGreen)
 	case llms.ChatMessageTypeTool:
-		c = color.New(color.FgYellow)
+		c = color.New(color.FgRed)
 	}
 
 	c.Println(pretty.Sprintf("[%s]: %s", msg.Role, msg.Parts))
