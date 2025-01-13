@@ -22,10 +22,17 @@ type ConversationalFlow struct {
 
 // NewConversationalFlow creates a new conversational flow.
 func NewConversationalFlow(systemPrompt string, llm llms.Model, toolMgr *tools.Manager) *ConversationalFlow {
+	chain := NewChain(nil)
+
+	planner := plannerTool{
+		chain: chain,
+		llm:   llm,
+	}
+
 	return &ConversationalFlow{
 		llm:          llm,
-		chain:        NewChain(nil),
-		toolMgr:      toolMgr,
+		chain:        chain,
+		toolMgr:      toolMgr.WithTool(&planner),
 		systemPrompt: systemPrompt,
 	}
 }
@@ -46,6 +53,7 @@ func (f *ConversationalFlow) Once(ctx context.Context) ([]llms.MessageContent, e
 // Loop executes the flow in a loop until the context is done.
 func (f *ConversationalFlow) Loop(ctx context.Context) ([]llms.MessageContent, error) {
 	history := make([]llms.MessageContent, 0)
+	logger := klog.FromContext(ctx)
 
 	if f.systemPrompt != "" {
 		history = appendHistory(ctx, history, llms.TextParts(llms.ChatMessageTypeSystem,
@@ -61,7 +69,7 @@ func (f *ConversationalFlow) Loop(ctx context.Context) ([]llms.MessageContent, e
 			executionHistory, err := f.execute(ctx, history)
 			history = executionHistory
 			if err != nil {
-				return history, fmt.Errorf("failed to execute flow: %w", err)
+				logger.Error(err, "failed to execute flow")
 			}
 		}
 	}
@@ -79,10 +87,10 @@ func (f *ConversationalFlow) execute(ctx context.Context,
 
 		response, err := step.
 			WithHistory(history, true).
-			WithCallOptions([]llms.CallOption{llms.WithTools(f.getTools())}).
+			WithCallOptions([]llms.CallOption{llms.WithTools(f.toolMgr.GetLLMTools())}).
 			Execute(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute step: %w", err)
+			return history, fmt.Errorf("failed to execute step: %w", err)
 		}
 
 		history = appendHistory(ctx, history, step.ToMessageContent(response))
@@ -114,15 +122,6 @@ func (f *ConversationalFlow) HumanStep(getter func(ctx context.Context) string) 
 	return f
 }
 
-func (f *ConversationalFlow) getTools() []llms.Tool {
-	planner := plannerTool{
-		chain: f.chain,
-		llm:   f.llm,
-	}
-
-	return append(f.toolMgr.GetLLMTools(), *planner.LLMTool())
-}
-
 func appendHistory(ctx context.Context, history []llms.MessageContent, msg llms.MessageContent) []llms.MessageContent {
 	c := color.New(color.FgHiWhite)
 	switch msg.Role {
@@ -131,14 +130,14 @@ func appendHistory(ctx context.Context, history []llms.MessageContent, msg llms.
 	case llms.ChatMessageTypeAI:
 		c = color.New(color.FgCyan)
 	case llms.ChatMessageTypeHuman:
-		c = color.New(color.FgGreen)
+		c = color.New(color.FgHiBlue)
 	case llms.ChatMessageTypeTool:
-		c = color.New(color.FgRed)
+		c = color.New(color.FgHiGreen)
 	}
 
 	// if tool, trim parts
 	if msg.Role == llms.ChatMessageTypeTool {
-		c.Println(slicedString(pretty.Sprintf("[%s]: %s", msg.Role, msg.Parts), 250))
+		c.Println(slicedString(pretty.Sprintf("[%s]: %s", msg.Role, msg.Parts), 200))
 	} else {
 		c.Println(pretty.Sprintf("[%s]: %s", msg.Role, msg.Parts))
 	}

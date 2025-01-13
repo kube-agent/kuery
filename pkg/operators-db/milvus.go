@@ -8,7 +8,6 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 	"github.com/tmc/langchaingo/chains"
 	"github.com/tmc/langchaingo/embeddings"
-	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/openai"
 	"github.com/tmc/langchaingo/vectorstores"
 	"github.com/tmc/langchaingo/vectorstores/milvus"
@@ -17,7 +16,7 @@ import (
 
 const (
 	baseURL  = "http://localhost:5500"
-	gptModel = "gpt-3.5-turbo-0125"
+	gptModel = "gpt-3.5-turbo-1106"
 )
 
 // MilvusStore implements OperatorsRetriever with Milvus as vector DB backend.
@@ -27,7 +26,7 @@ type MilvusStore struct {
 }
 
 // NewMilvusStore creates a new MilvusStore instance.
-func NewMilvusStore(ctx context.Context, llm llms.Model) (OperatorsRetriever, error) {
+func NewMilvusStore(ctx context.Context) (OperatorsRetriever, error) {
 	openaiLLM, err := openai.New(openai.WithModel(gptModel))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create openai LLM: %w", err)
@@ -63,7 +62,7 @@ func NewMilvusStore(ctx context.Context, llm llms.Model) (OperatorsRetriever, er
 
 	return &MilvusStore{
 		store: store,
-		retrievalChain: chains.NewRetrievalQAFromLLM(llm,
+		retrievalChain: chains.NewRetrievalQAFromLLM(openaiLLM,
 			vectorstores.ToRetriever(store, 6, vectorstores.WithScoreThreshold(0.7))),
 	}, nil
 }

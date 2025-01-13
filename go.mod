@@ -8,6 +8,7 @@ require (
 	github.com/milvus-io/milvus-sdk-go/v2 v2.4.2
 	github.com/mittwald/go-helm-client v0.12.16
 	github.com/tmc/langchaingo v0.1.12
+	helm.sh/helm/v3 v3.16.4
 	k8s.io/apiextensions-apiserver v0.32.0
 	k8s.io/apimachinery v0.32.0
 	k8s.io/client-go v0.32.0
@@ -156,7 +157,6 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	helm.sh/helm/v3 v3.16.4 // indirect
 	k8s.io/api v0.32.0 // indirect
 	k8s.io/apiserver v0.32.0 // indirect
 	k8s.io/cli-runtime v0.32.0 // indirect

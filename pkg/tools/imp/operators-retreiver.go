@@ -8,6 +8,8 @@ import (
 	operators_db "github.com/vMaroon/Kuery/pkg/operators-db"
 )
 
+const functionToolType = "function"
+
 // OperatorsRAGTool is a tool that retrieves the operator schema that is most relevant to the prompt.
 type OperatorsRAGTool struct {
 	operators_db.OperatorsRetriever

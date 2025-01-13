@@ -29,7 +29,7 @@ func (k *K8sDynamicClient) LLMTool() *llms.Tool {
 			Name: k.Name(),
 			Description: `Interact with Kubernetes Cluster.
 						  This tool should be used when the user wants to interact with the Kubernetes cluster.
-							This tool should be used with clear user intent.`,
+							MAKE SURE YOU ASK THE USER FOR PERMISSION.`,
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -39,7 +39,7 @@ func (k *K8sDynamicClient) LLMTool() *llms.Tool {
 										LIST: List resources.
 										GET: Get a resource by name.	
 										POST: Create a resource. When using POST, you can skip identification fields (except for NS if needed).
-										PUT: Update a resource. When using PUT, you can skip identification fields (except for NS if needed).
+										PUT: UPDATE a resource. When using PUT, you can skip identification fields (except for NS if needed).
 										DELETE: Delete a resource.
 										List resources, get a resource by name, create a resource, update a resource, delete a resource.
 										If unsure about the object identification (GVR+namespacedName), use LIST to delegate task to a future call.

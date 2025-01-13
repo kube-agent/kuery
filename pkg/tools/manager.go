@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"github.com/tmc/langchaingo/llms"
+	"k8s.io/klog/v2"
 )
 
 // Manager is a tool manager that holds all available tools, and provides methods
@@ -51,10 +52,12 @@ func (m *Manager) GetLLMTools() []llms.Tool {
 // If the response does not contain any tool calls, it returns an empty slice.
 func (m *Manager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentResponse) []llms.MessageContent {
 	newMessages := make([]llms.MessageContent, 0)
+	logger := klog.FromContext(ctx)
 	for _, choice := range resp.Choices {
 		for _, toolCall := range choice.ToolCalls {
 			tool := m.GetTool(toolCall.FunctionCall.Name)
 			if tool == nil {
+				logger.Info("tool not found", "toolCall", toolCall)
 				continue
 			}
 

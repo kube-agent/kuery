@@ -12,7 +12,7 @@ import (
 func getDocs() []schema.Document {
 	type meta = map[string]any
 	docs := []schema.Document{
-		{PageContent: "KafkaTopic: resource for creating Topics in a Kafka instance.",
+		{PageContent: "KafkaTopic: TOPIC",
 			Metadata: meta{
 				"cr_example": `apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaTopic
@@ -27,7 +27,7 @@ spec:
     retention.ms: 7200000
     segment.bytes: 1073741824`,
 			}},
-		{PageContent: "Kafka: resource for deploying the Kafka instance.",
+		{PageContent: "Kafka: resource for deploying the KAFKA CLUSTER with STRIMZI.",
 			Metadata: meta{
 				"cr_example": `apiVersion: kafka.strimzi.io/v1beta2
 kind: Kafka
@@ -35,7 +35,7 @@ metadata:
   name: my-cluster
 spec:
   kafka:
-    version: 3.9.0
+    version: 3.9.0 # Supported versions are: [3.8.0, 3.8.1, 3.9.0]
     replicas: 1
     listeners:
       - name: plain
@@ -66,7 +66,7 @@ spec:
 	}
 
 	for idx := range docs {
-		docs[idx].PageContent = fmt.Sprintf("%s\n CR Example: %s",
+		docs[idx].PageContent = fmt.Sprintf("%s\nCR Example: %s",
 			docs[idx].PageContent, docs[idx].Metadata["cr_example"])
 	}
 

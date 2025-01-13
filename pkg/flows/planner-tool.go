@@ -23,15 +23,17 @@ func (p *plannerTool) LLMTool() *llms.Tool {
 		Type: "function",
 		Function: &llms.FunctionDefinition{
 			Name: p.Name(),
-			Description: `Extend the conversation flow with a step.
+			Description: `Extend the execution flow with a step.
 						  This tool should be used when a user request requires a multi-step plan for serving.
-						  When planning is necessary, plan one step at a time and use this tool to add the step to the flow.`,
+						  When planning is necessary, plan one step at a time and use this tool to add the step to the flow.
+
+						  This tool is useful for when you need to run again before giving the turn back to the user.`,
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"prompt": map[string]any{
 						"type":        "string",
-						"description": "The instructional prompt for the planning step, to be read by you in the next iteration.",
+						"description": "The instructional prompt for the added step, to be read by you in the next iteration.",
 					},
 				},
 				"required": []string{"prompt"},

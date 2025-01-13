@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	helmclient "github.com/mittwald/go-helm-client"
 	"github.com/tmc/langchaingo/llms"
+	"github.com/tmc/langchaingo/llms/anthropic"
 	"github.com/tmc/langchaingo/llms/openai"
 	crd_discovery "github.com/vMaroon/Kuery/pkg/crd-discovery"
 	"github.com/vMaroon/Kuery/pkg/flows"
@@ -15,22 +17,46 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"log"
+	"os"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-const systemPrompt = `
+const (
+	gptModel       = "gpt-4-1106-preview"
+	anthropicModel = "claude-3-5-sonnet-20241022"
+	systemPrompt   = `
 You are a kubernetes and cloud expert that is providing general-purpose assistance for users.
-You have access to cluster resources/APIs and sets of operators that can be deployed.
+You have access to cluster resources/APIs and sets of operators that can be deployed. The user does not see toolcalls, make sure to be transparent about it.
 
-Your access is granted through tool-calling capabilities that wrap APIs and RAG applications. If a tool fails, retry twice max.
-NOTE THAT you have the unique "addContext" tool to forcefully grant your self an additional turn before the user. Otherwise once you're done, you cannot proceed before the user inputs.'
-You should use "addContext" if resolving a user's request requires multi-step planning or execution.
+Your access is granted through tool-calling capabilities that wrap APIs. If a tool fails, retry twice max.
 
-You do not only suggest what the user can do, instead you propose doing it for them using the tools you have, after requesting permission.
+NOTE THAT you have the unique "addContext" tool to forcefully grant your self an additional turn before the user.'
+You should use "addContext" if resolving a user's request requires multi-step planning or added execution.
+
+You do not only suggest what the user can do, instead you propose doing it for them using the tools you have after requesting permission.
 You extremely prefer to call tools to do the job if they exist in your list of tools.
-Also recall that a cluster's language is mostly CRs (and learning their CRDs). For example, when a new operator is installed,
-or one that you're not familiar with already exists, you need to learn its CRDs in order to assist the user with using it.
+
+Make sure the user agrees with what you're doing, especially before cluster-effecting tool calls.
+When running multi-step plans, make sure to ask the user for permission before every step.'
 `
+)
+
+func setupLLM(ctx context.Context) (llms.Model, error) {
+	logger := klog.FromContext(ctx)
+	llm := os.Getenv("LLM")
+	// check if openai api key is set
+	if llm == "OPENAI" {
+		logger.Info("Using OpenAI LLM", "model", gptModel)
+		return openai.New(openai.WithModel(gptModel))
+	}
+
+	if llm == "ANTHROPIC" {
+		logger.Info("Using Anthropic LLM", "model", anthropicModel)
+		return anthropic.New(anthropic.WithModel(anthropicModel))
+	}
+
+	return nil, fmt.Errorf("no API key found")
+}
 
 func main() {
 	ctx := context.Background()
@@ -39,13 +65,12 @@ func main() {
 
 	logger := klog.FromContext(ctx)
 
-	llm, err := openai.New()
+	llm, err := setupLLM(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
-	logger.Info("LLM initialized")
 
-	toolsMgr := setupToolsMgr(ctx, llm)
+	toolsMgr := setupToolsMgr(ctx)
 	logger.Info("Tools manager initialized")
 
 	flow := flows.NewConversationalFlow(systemPrompt, llm, toolsMgr)
@@ -62,14 +87,15 @@ func main() {
 	}
 }
 
-func setupToolsMgr(ctx context.Context, llm llms.Model) *tools.Manager {
+func setupToolsMgr(ctx context.Context) *tools.Manager {
 	logger := klog.FromContext(ctx)
 	var callables []tools.Tool
 
-	operatorsRetriever, err := operators_db.NewMilvusStore(ctx, llm)
+	operatorsRetriever, err := operators_db.NewMilvusStore(ctx)
 	if err != nil {
 		logger.Error(err, "Failed to create operators retriever, tool won't be enabled")
 	} else {
+		logger.Info("Operators retriever initialized")
 		callables = append(callables, &imp.OperatorsRAGTool{operatorsRetriever})
 	}
 
@@ -81,14 +107,16 @@ func setupToolsMgr(ctx context.Context, llm llms.Model) *tools.Manager {
 		if err != nil {
 			logger.Error(err, "Failed to create dynamic K8s client, K8s tools won't be enabled")
 		} else {
+			logger.Info("Dynamic K8s client initialized")
 			callables = append(callables, &imp.K8sDynamicClient{dynamicKubeClient})
 		}
 	}
 
-	apiDiscovery, err := crd_discovery.NewMilvusStore(ctx, llm)
+	apiDiscovery, err := crd_discovery.NewMilvusStore(ctx)
 	if err != nil {
 		logger.Error(err, "Failed to create API discovery, tool won't be enabled")
 	} else {
+		logger.Info("API discovery initialized")
 		callables = append(callables, &imp.K8sAPIDiscoveryTool{apiDiscovery})
 	}
 
