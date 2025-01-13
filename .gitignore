@@ -23,7 +23,6 @@ bin
 *.log
 coverage.*
 cover.out
-tools
 build
 .vscode
 .idea

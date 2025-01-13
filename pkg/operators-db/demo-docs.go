@@ -31,8 +31,18 @@ func getDocs() []schema.Document {
 						"Monitoring - Built-in support for monitoring using Prometheus and provided Grafana dashboards",
 					},
 					Setup: []string{
-						"helm repo add strimzi https://strimzi.io/charts",
-						"helm install my-strimzi-kafka-operator strimzi/strimzi-kafka-operator --version 0.44.0",
+						`To install the operator, create the following resource:
+
+							apiVersion: operators.coreos.com/v1alpha1
+							kind: Subscription
+							metadata:
+							  name: my-strimzi-kafka-operator
+							  namespace: operators
+							spec:
+							  channel: stable
+							  name: strimzi-kafka-operator
+							  source: operatorhubio-catalog
+							  sourceNamespace: olm`,
 					},
 				}}},
 		{PageContent: "Kubeflow Operator for deployment and management of Kubeflow",

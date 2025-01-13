@@ -67,7 +67,7 @@ func (k *K8sDynamicClient) LLMTool() *llms.Tool {
 					},
 					"object": map[string]any{
 						"type":        "string",
-						"description": `The object to create or update. This should be a JSON object that can be used as-is.`,
+						"description": `The object to create or update. This should be a JSON object that can be unmarshalled in go.`,
 					},
 				},
 				"required": []string{"operation", "group", "version", "resource", "name", "namespace"},
@@ -170,6 +170,8 @@ func (k *K8sDynamicClient) interactWithClient(ctx context.Context, operation str
 
 		return fmt.Sprintf("%v", unstructuredList), nil
 	case "POST":
+		fallthrough
+	case "PUT":
 		var err error
 		var unstructuredObj *unstructured.Unstructured
 
@@ -196,6 +198,26 @@ func (k *K8sDynamicClient) interactWithClient(ctx context.Context, operation str
 		}
 
 		return fmt.Sprintf("%v", unstructuredObj), nil
+	case "DELETE":
+		var err error
+
+		if args.Namespace == metav1.NamespaceNone {
+			err = k.Client.Resource(schema.GroupVersionResource{
+				Group:    args.Group,
+				Version:  args.Version,
+				Resource: args.Resource,
+			}).Delete(ctx, args.Name, metav1.DeleteOptions{})
+		} else {
+			err = k.Client.Resource(schema.GroupVersionResource{
+				Group:    args.Group,
+				Version:  args.Version,
+				Resource: args.Resource,
+			}).Namespace(args.Namespace).Delete(ctx, args.Name, metav1.DeleteOptions{})
+		}
+
+		if err != nil {
+			return "", fmt.Errorf("failed to delete resource: %w", err)
+		}
 	}
 
 	return "", fmt.Errorf("unsupported operation: %v", operation)

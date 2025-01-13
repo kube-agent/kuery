@@ -5,9 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/tmc/langchaingo/llms"
+	"helm.sh/helm/v3/pkg/repo"
+	"time"
+
+	"github.com/mittwald/go-helm-client"
 )
 
 type HelmTool struct {
+	Client helmclient.Client
 }
 
 func (ht *HelmTool) Name() string {
@@ -19,36 +24,56 @@ func (ht *HelmTool) LLMTool() *llms.Tool {
 		Type: functionToolType,
 		Function: &llms.FunctionDefinition{
 			Name: ht.Name(),
-			Description: "Interact with Helm. Install, upgrade, delete, etc." +
+			Description: "Interact with Helm. Add chart repo, install chart, delete chart, upgrade chart." +
 				"This tool should be used with clear user intent.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"operation": map[string]any{
-						"type":        "string",
-						"description": "The operation to perform: install, upgrade, delete, etc.",
+						"type": "string",
+						"description": `The operation to perform:
+										ADD_REPO: adds a Helm chart repository
+													For this operation, use the 'name' and 'url' fields.
+										INSTALL: installs a Helm chart
+													For this operation, use the 'releaseName', 'chartName' and 'namespace' fields.
+										DELETE: deletes a Helm chart. Fields are same as INSTALL.
+										UPGRADE: upgrades a Helm chart. Fields are same as ADD_REPO.`,
 					},
-					"chart": map[string]any{
+					"name": map[string]any{
 						"type":        "string",
-						"description": "The Helm chart to use",
+						"description": "The name of the Helm chart repository. For example: bitnami",
 					},
-					"values": map[string]any{
+					"url": map[string]any{
 						"type":        "string",
-						"description": "The values to use for the chart",
+						"description": "The URL of the Helm chart repository. For example: https://charts.bitnami.com/bitnami",
+					},
+					"releaseName": map[string]any{
+						"type":        "string",
+						"description": "The release name of the Helm chart. For example: etcd-operator",
+					},
+					"chartName": map[string]any{
+						"type":        "string",
+						"description": "The name of the Helm chart. For example: stable/etcd-operator",
 					},
 				},
-				"required": []string{"operation", "chart"},
+				"required": []string{"operation"},
 			},
 		},
 	}
 }
 
+type chartCall struct {
+	Operation   string `json:"operation"`
+	Name        string `json:"name"`
+	URL         string `json:"url"`
+	ReleaseName string `json:"releaseName"`
+	ChartName   string `json:"chartName"`
+	Namespace   string `json:"namespace"`
+}
+
 func (ht *HelmTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
-	var args struct {
-		Operation string `json:"operation"`
-		Chart     string `json:"chart"`
-		Values    string `json:"values"`
-	}
+	var args chartCall
+
 	if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
 		return llms.ToolCallResponse{
 			ToolCallID: toolCall.ID,
@@ -57,7 +82,7 @@ func (ht *HelmTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.Tool
 		}
 	}
 
-	response, err := helmOperation(args.Operation, args.Chart, args.Values)
+	response, err := ht.helmOperation(ctx, args)
 	if err != nil {
 		return llms.ToolCallResponse{
 			ToolCallID: toolCall.ID,
@@ -74,7 +99,33 @@ func (ht *HelmTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.Tool
 }
 
 // helmOperation executes the Helm operation and returns the response.
-func helmOperation(operation, chart, values string) (string, error) {
-	// execute Helm operation
-	return fmt.Sprintf("Helm operation performed: %s %s %s", operation, chart, values), nil
+func (ht *HelmTool) helmOperation(ctx context.Context, args chartCall) (string, error) {
+	switch args.Operation {
+	case "ADD_REPO":
+		if err := ht.Client.AddOrUpdateChartRepo(repo.Entry{
+			Name: args.Name,
+			URL:  args.URL,
+		}); err != nil {
+			return "", fmt.Errorf("failed to add Helm chart repository: %w", err)
+		}
+
+		return fmt.Sprintf("Helm chart repository %q added successfully", args.Name), nil
+	case "INSTALL":
+		release, err := ht.Client.InstallChart(ctx, &helmclient.ChartSpec{
+			ReleaseName: args.ReleaseName,
+			ChartName:   args.ChartName,
+			Namespace:   args.Namespace,
+			UpgradeCRDs: true,
+			Wait:        true,
+			Timeout:     32 * time.Second,
+		}, nil)
+
+		if err != nil {
+			return "", fmt.Errorf("failed to install Helm chart: %w", err)
+		}
+
+		return fmt.Sprintf("Helm chart %q installed successfully", release.Name), nil
+	default:
+		return "", fmt.Errorf("unsupported operation %q", args.Operation)
+	}
 }

@@ -1,8 +1,7 @@
-package operators_db
+package crd_discovery
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
@@ -12,7 +11,6 @@ import (
 	"github.com/tmc/langchaingo/llms/openai"
 	"github.com/tmc/langchaingo/vectorstores"
 	"github.com/tmc/langchaingo/vectorstores/milvus"
-	"k8s.io/klog/v2"
 )
 
 const (
@@ -27,7 +25,7 @@ type MilvusStore struct {
 }
 
 // NewMilvusStore creates a new MilvusStore instance.
-func NewMilvusStore(ctx context.Context, llm llms.Model) (OperatorsRetriever, error) {
+func NewMilvusStore(ctx context.Context, llm llms.Model) (APIDiscovery, error) {
 	openaiLLM, err := openai.New(openai.WithModel(gptModel))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create openai LLM: %w", err)
@@ -49,7 +47,7 @@ func NewMilvusStore(ctx context.Context, llm llms.Model) (OperatorsRetriever, er
 		ctx,
 		milvusConfig,
 		milvus.WithDropOld(),
-		milvus.WithCollectionName("operators_db"),
+		milvus.WithCollectionName("crds_db"),
 		milvus.WithIndex(idx),
 		milvus.WithEmbedder(embedder),
 	)
@@ -83,29 +81,22 @@ func (m *MilvusStore) Ask(ctx context.Context, prompt string) (string, error) {
 	return result, nil
 }
 
-// RetrieveOperators retrieves the OperatorSchema of the operators that are
-// most relevant to the prompt.
-func (m *MilvusStore) RetrieveOperators(ctx context.Context, prompt string) ([]OperatorSchema, error) {
+// RetrieveCRDs retrieves the CRDs that are most relevant to the prompt.
+func (m *MilvusStore) RetrieveCRDs(ctx context.Context, prompt string) ([]string, error) {
 	docs, err := m.store.SimilaritySearch(ctx, prompt, 3,
 		vectorstores.WithScoreThreshold(0.8))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get relevant documents: %w", err)
 	}
 
-	var schemas []OperatorSchema
-	logger := klog.FromContext(ctx)
+	var crd string
 
 	for _, doc := range docs {
-		schema, err := unstructuredMapToOperatorSchema(doc.Metadata["schema"].(map[string]interface{}))
-		if err != nil {
-			logger.Error(err, "failed to convert unstructured map to operator schema")
-			continue
-		}
-
-		schemas = append(schemas, *schema)
+		crd = doc.Metadata["cr_example"].(string)
+		break
 	}
 
-	return schemas, nil
+	return []string{crd}, nil
 }
 
 func populateDocs(ctx context.Context, store vectorstores.VectorStore) error {
@@ -114,18 +105,4 @@ func populateDocs(ctx context.Context, store vectorstores.VectorStore) error {
 	}
 
 	return nil
-}
-
-func unstructuredMapToOperatorSchema(m map[string]interface{}) (*OperatorSchema, error) {
-	data, err := json.Marshal(m)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal map: %w", err)
-	}
-
-	operatorSchema := OperatorSchema{}
-	if err := json.Unmarshal(data, &operatorSchema); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal operator schema: %w", err)
-	}
-
-	return &operatorSchema, nil
 }

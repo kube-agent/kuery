@@ -24,7 +24,9 @@ func (ort *OperatorsRAGTool) LLMTool() *llms.Tool {
 			Name: ort.Name(),
 			Description: `Retrieve the operator information that is most relevant to the prompt.
 						  This tool is used to retrieve kubernetes operators information before answering a relevant user prompt.
-						  This tool should be used before generating answers from nothing. Do not over-use with the same prompt.`,
+						  This tool should be used before generating answers from nothing. Do not over-use with the same prompt.
+
+						  To install an operator, you must POST the Subscription specified in a schema to the dynamic K8s client.`,
 
 			Parameters: map[string]interface{}{
 				"type": "object",
