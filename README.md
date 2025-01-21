@@ -1,11 +1,12 @@
 # Kuery
 
-Kuery is an open-source LLM-based assistant that allows you to chat with your Kubernetes cluster. 
-Kuery can assist you with deploying applications, managing resources, and much more.
+#### Disclaimer: Project is currently in a PoC state.
+Kuery is an open-source LLM-based assistant that allows users to chat with their Kubernetes clusters. 
+Kuery can assist users with deploying applications, managing resources, and much more.
 
-Kuery uses basic functionality of langchaingo and implements its own mini-framework for agents based flows.
+Kuery enables Kubernetes users by bridging knowledge gaps and simplifying the interaction with the cluster, 
+and empowers power users by accelerating and automating their workflows.
 
-Disclaimer: currently the project is in a demo state - the majority of the pipeline is implemented, but the project is not yet fully functional.
 ## System
 
 Kuery provides a turn-based terminal chat interface that allows you to interact with your Kubernetes cluster. 
@@ -20,11 +21,11 @@ In addition to the above capabilities, Kuery will be able extract workflows from
 
 ## Use Cases
 
-1. Any user who wants to interact with their Kubernetes cluster in a more conversational manner
+1. Any user who wants to interact with their Kubernetes cluster in a conversational manner
 2. Users who want to deploy applications and manage resources without having to remember complex commands, or are unaware of the possibilities
-3. Users who want to automate tasks and workflows in their Kubernetes cluster
+3. Users wishing to automate tasks and workflows in their Kubernetes cluster
 
-## Installation
+## Installation (PoC)
 
 ### Configuration
 
@@ -33,12 +34,14 @@ In addition to the above capabilities, Kuery will be able extract workflows from
 1. OPENAI (gpt-4-1106-preview)
 ```
     export LLM=OPENAI
+    export MODEL=gpt-4-1106-preview
     export OPENAI_API_KEY=...
 ```
 
 2. ANTHROPIC (claude-3-5-sonnet-20241022)
 ```
     export LLM=ANTHROPIC
+    export MODEL=claude-3-5-sonnet-20241022
     export ANTHROPIC_API_KEY=...
 ```
 

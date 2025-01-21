@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	crd_discovery "github.com/kube-agent/Kuery/pkg/crd-discovery"
 	"github.com/tmc/langchaingo/llms"
-	crd_discovery "github.com/vMaroon/Kuery/pkg/crd-discovery"
 )
 
 // K8sAPIDiscoveryTool is a tool that interacts with a vector-db of discovered APIs.

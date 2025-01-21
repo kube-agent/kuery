@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/kube-agent/Kuery/pkg/flows/steps"
 	"github.com/tmc/langchaingo/llms"
-	"github.com/vMaroon/Kuery/pkg/flows/steps"
 )
 
 // plannerTool is a tool that can add a step of planning to a given chain.

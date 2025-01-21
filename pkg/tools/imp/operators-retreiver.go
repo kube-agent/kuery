@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	operators_db "github.com/kube-agent/Kuery/pkg/operators-db"
 	"github.com/tmc/langchaingo/llms"
-	operators_db "github.com/vMaroon/Kuery/pkg/operators-db"
 )
 
 const functionToolType = "function"

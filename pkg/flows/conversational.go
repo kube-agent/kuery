@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"github.com/fatih/color"
 	"github.com/kr/pretty"
+	"github.com/kube-agent/Kuery/pkg/flows/steps"
+	"github.com/kube-agent/Kuery/pkg/tools"
 	"github.com/tmc/langchaingo/llms"
-	"github.com/vMaroon/Kuery/pkg/flows/steps"
-	"github.com/vMaroon/Kuery/pkg/tools"
 	"k8s.io/klog/v2"
 )
 

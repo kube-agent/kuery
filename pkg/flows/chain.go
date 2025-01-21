@@ -1,7 +1,7 @@
 package flows
 
 import (
-	"github.com/vMaroon/Kuery/pkg/flows/steps"
+	"github.com/kube-agent/Kuery/pkg/flows/steps"
 	"slices"
 )
 
