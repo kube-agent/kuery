@@ -47,3 +47,6 @@ core-chart/charts/
 
 # Milvus volumes of path pkg/operators-db/volumes/*
 pkg/operators-db/volumes/*
+
+# Codegen and friends
+hack/tools
