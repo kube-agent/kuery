@@ -1,4 +1,4 @@
-module github.com/kube-agent/Kuery
+module github.com/kube-agent/kuery
 
 go 1.23.2
 

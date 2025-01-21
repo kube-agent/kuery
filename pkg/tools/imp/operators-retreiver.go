@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	operators_db "github.com/kube-agent/Kuery/pkg/operators-db"
+	operators_db "github.com/kube-agent/kuery/pkg/operators-db"
 	"github.com/tmc/langchaingo/llms"
 )
 

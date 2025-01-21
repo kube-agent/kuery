@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/kube-agent/Kuery/pkg/flows/steps"
+	"github.com/kube-agent/kuery/pkg/flows/steps"
 	"github.com/tmc/langchaingo/llms"
 )
 

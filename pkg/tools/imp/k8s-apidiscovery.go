@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	crd_discovery "github.com/kube-agent/Kuery/pkg/crd-discovery"
+	crd_discovery "github.com/kube-agent/kuery/pkg/crd-discovery"
 	"github.com/tmc/langchaingo/llms"
 )
 
