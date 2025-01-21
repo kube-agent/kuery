@@ -3,6 +3,7 @@ package crd_discovery
 import (
 	"context"
 	"fmt"
+
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 	"github.com/tmc/langchaingo/chains"

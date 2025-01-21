@@ -2,6 +2,7 @@ package crd_discovery
 
 import (
 	"fmt"
+
 	"github.com/tmc/langchaingo/schema"
 )
 

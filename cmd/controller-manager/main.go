@@ -3,42 +3,30 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
+
+	helmclient "github.com/mittwald/go-helm-client"
+	"github.com/tmc/langchaingo/llms"
+	"github.com/tmc/langchaingo/llms/anthropic"
+	"github.com/tmc/langchaingo/llms/openai"
+
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
+	ctrl "sigs.k8s.io/controller-runtime"
+
 	crd_discovery "github.com/kube-agent/kuery/pkg/crd-discovery"
 	"github.com/kube-agent/kuery/pkg/flows"
 	"github.com/kube-agent/kuery/pkg/flows/steps"
 	operators_db "github.com/kube-agent/kuery/pkg/operators-db"
 	"github.com/kube-agent/kuery/pkg/tools"
 	"github.com/kube-agent/kuery/pkg/tools/imp"
-	helmclient "github.com/mittwald/go-helm-client"
-	"github.com/tmc/langchaingo/llms"
-	"github.com/tmc/langchaingo/llms/anthropic"
-	"github.com/tmc/langchaingo/llms/openai"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
-	"k8s.io/klog/v2"
-	"log"
-	"os"
-	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 const (
 	gptModel       = "gpt-4-1106-preview"
 	anthropicModel = "claude-3-5-sonnet-20241022"
-	systemPrompt   = `
-You are a kubernetes and cloud expert that is providing general-purpose assistance for users.
-You have access to cluster resources/APIs and sets of operators that can be deployed. The user does not see toolcalls, make sure to be transparent about it.
-
-Your access is granted through tool-calling capabilities that wrap APIs. If a tool fails, retry twice max.
-
-NOTE THAT you have the unique "addContext" tool to forcefully grant your self an additional turn before the user.'
-You should use "addContext" if resolving a user's request requires multi-step planning or added execution.
-
-You do not only suggest what the user can do, instead you propose doing it for them using the tools you have after requesting permission.
-You extremely prefer to call tools to do the job if they exist in your list of tools.
-
-Make sure the user agrees with what you're doing, especially before cluster-effecting tool calls.
-When running multi-step plans, make sure to ask the user for permission before every step.'
-`
 )
 
 func setupLLM(ctx context.Context) (llms.Model, error) {
@@ -70,10 +58,16 @@ func main() {
 		log.Fatal(err)
 	}
 
-	toolsMgr := setupToolsMgr(ctx)
+	cfg, err := ctrl.GetConfig()
+	if err != nil {
+		logger.Error(err, "Failed to get kubeconfig, K8s tools won't be enabled")
+	}
+
+	toolsMgr := setupToolsMgr(ctx, cfg)
 	logger.Info("Tools manager initialized")
 
-	flow := flows.NewConversationalFlow(systemPrompt, llm, toolsMgr)
+	flow := flows.NewConversationalFlow(systemPrompt, llm, toolsMgr, cfg)
+	logger.Info("Conversational flow initialized", "tools", toolsMgr.GetToolNames())
 	// Sample human step of a user that has a cluster with several services and the need for a high performance message
 	// bus operator:
 	// I have a cluster with several services and I think I need a high performance message bus operator for event-driven communication.
@@ -87,7 +81,7 @@ func main() {
 	}
 }
 
-func setupToolsMgr(ctx context.Context) *tools.Manager {
+func setupToolsMgr(ctx context.Context, cfg *rest.Config) *tools.Manager {
 	logger := klog.FromContext(ctx)
 	var callables []tools.Tool
 
@@ -99,10 +93,7 @@ func setupToolsMgr(ctx context.Context) *tools.Manager {
 		callables = append(callables, &imp.OperatorsRAGTool{operatorsRetriever})
 	}
 
-	cfg, err := ctrl.GetConfig()
-	if err != nil {
-		logger.Error(err, "Failed to get kubeconfig, K8s tools won't be enabled")
-	} else {
+	if cfg != nil {
 		dynamicKubeClient, err := dynamic.NewForConfig(cfg)
 		if err != nil {
 			logger.Error(err, "Failed to create dynamic K8s client, K8s tools won't be enabled")

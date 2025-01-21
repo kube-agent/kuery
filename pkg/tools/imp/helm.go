@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/tmc/langchaingo/llms"
-	"helm.sh/helm/v3/pkg/repo"
 	"time"
 
 	"github.com/mittwald/go-helm-client"
+	"github.com/tmc/langchaingo/llms"
+	"helm.sh/helm/v3/pkg/repo"
+
+	"github.com/kube-agent/kuery/pkg/tools"
 )
+
+var _ tools.Tool = &HelmTool{}
 
 type HelmTool struct {
 	Client helmclient.Client

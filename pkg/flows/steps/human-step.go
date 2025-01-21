@@ -4,8 +4,9 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/tmc/langchaingo/llms"
 	"os"
+
+	"github.com/tmc/langchaingo/llms"
 )
 
 // HumanStep is a step that represents a human step in a flow.

@@ -40,6 +40,75 @@ spec:
             type: object
           spec:
             description: KueryFlowSpec defines the desired state of KueryFlow.
+            properties:
+              steps:
+                description: steps is a sequence of steps to be executed in order.
+                items:
+                  description: Step defines a step in a KueryFlow.
+                  properties:
+                    aiPrompt:
+                      description: aiPrompt is the prompt to be sent to the AI model
+                        in an AI step.
+                      type: string
+                    argsToRecalculate:
+                      description: |-
+                        argsToRecalculate is a list of argument-names that should be
+                        recalculated by the Kuery. Names appearing in this list should be
+                        present in the parameters of the functionCall.
+                      items:
+                        type: string
+                      type: array
+                    contextForHuman:
+                      description: |-
+                        contextForHuman is a human-readable description of the step, to be
+                        displayed in the UI in the case of a human step.
+                      type: string
+                    functionCall:
+                      description: |-
+                        functionCall is the function call to be executed in a tool step.
+                        A functionCall consists of the name of the function to be executed,
+                        and the parameters to be passed to the function. A parameter may be
+                        a concrete value or "RECALCULATE" to indicate that the value should
+                        be recalculated by the Kuery.
+                      properties:
+                        arguments:
+                          description: The arguments to pass to the function, as a
+                            JSON string.
+                          type: string
+                        name:
+                          description: The name of the function to call.
+                          type: string
+                      required:
+                      - arguments
+                      - name
+                      type: object
+                    type:
+                      description: |-
+                        type is the type of the step.
+                        A step can be of types:
+                        - human: a step that requires human intervention. Typically, this
+                        means that the step is a manual step that requires a human to
+                        input a message to Kuery.
+                        When type is `human`, the contextForHuman field should be set.
+
+                        - ai: a step that is executed by an AI model. This is a step that
+                        is executed by an AI model, and the result is returned to Kuery.
+                        When type is `ai`, the aiPrompt field MUST be set.
+
+                        - tool: a step that is executed by a tool. This is a step that
+                        results in a function call to a tool. When type is `tool`, the
+                        functionCall field MUST be set.
+                      enum:
+                      - human
+                      - ai
+                      - tool
+                      type: string
+                  required:
+                  - type
+                  type: object
+                type: array
+            required:
+            - steps
             type: object
           status:
             description: KueryFlowStatus defines the observed state of KueryFlow.

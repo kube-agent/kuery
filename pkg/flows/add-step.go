@@ -4,25 +4,30 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/kube-agent/kuery/pkg/flows/steps"
+
 	"github.com/tmc/langchaingo/llms"
+
+	"github.com/kube-agent/kuery/pkg/flows/steps"
+	"github.com/kube-agent/kuery/pkg/tools"
 )
 
-// plannerTool is a tool that can add a step of planning to a given chain.
-type plannerTool struct {
+var _ tools.Tool = &addStepTool{}
+
+// addStepTool is a tool that can add a step of planning to a given chain.
+type addStepTool struct {
 	chain Chain
 	llm   llms.Model
 }
 
-func (p *plannerTool) Name() string {
-	return "addContext"
+func (t *addStepTool) Name() string {
+	return "AddStep"
 }
 
-func (p *plannerTool) LLMTool() *llms.Tool {
+func (t *addStepTool) LLMTool() *llms.Tool {
 	return &llms.Tool{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
-			Name: p.Name(),
+			Name: t.Name(),
 			Description: `Extend the execution flow with a step.
 						  This tool should be used when a user request requires a multi-step plan for serving.
 						  When planning is necessary, plan one step at a time and use this tool to add the step to the flow.
@@ -42,7 +47,7 @@ func (p *plannerTool) LLMTool() *llms.Tool {
 	}
 }
 
-func (p *plannerTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
+func (t *addStepTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
 	var args struct {
 		Prompt string `json:"prompt"`
 	}
@@ -54,7 +59,7 @@ func (p *plannerTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.To
 		}
 	}
 
-	if p.chain == nil || p.llm == nil {
+	if t.chain == nil || t.llm == nil {
 		return llms.ToolCallResponse{
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
@@ -62,14 +67,14 @@ func (p *plannerTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.To
 		}
 	}
 
-	step := steps.NewLLMStep(p.llm).WithHistory([]llms.MessageContent{
+	step := steps.NewLLMStep(t.llm).WithHistory([]llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeAI, args.Prompt),
 	}, false)
-	p.chain.PushNext(step, true) // has to be true because the prompt would reset on chain::Reset
+	t.chain.PushNext(step, true) // has to be true because the prompt would reset on chain::Reset
 
 	return llms.ToolCallResponse{
 		ToolCallID: toolCall.ID,
 		Name:       toolCall.FunctionCall.Name,
-		Content:    "Added planner step with prompt: " + args.Prompt,
+		Content:    "Added AI step with prompt: " + args.Prompt,
 	}
 }

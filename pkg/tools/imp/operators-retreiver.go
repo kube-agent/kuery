@@ -4,11 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	operators_db "github.com/kube-agent/kuery/pkg/operators-db"
+
 	"github.com/tmc/langchaingo/llms"
+
+	operators_db "github.com/kube-agent/kuery/pkg/operators-db"
+	"github.com/kube-agent/kuery/pkg/tools"
 )
 
 const functionToolType = "function"
+
+var _ tools.Tool = &OperatorsRAGTool{}
 
 // OperatorsRAGTool is a tool that retrieves the operator schema that is most relevant to the prompt.
 type OperatorsRAGTool struct {

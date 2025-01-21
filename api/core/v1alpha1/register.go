@@ -17,11 +17,11 @@ limitations under the License.
 package v1alpha1
 
 import (
-	mygroup "github.com/kube-agent/kuery/api/core"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	mygroup "github.com/kube-agent/kuery/api/core"
 )
 
 // SchemeGroupVersion is group version used to register these objects

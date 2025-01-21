@@ -2,7 +2,9 @@ package tools
 
 import (
 	"context"
+
 	"github.com/tmc/langchaingo/llms"
+
 	"k8s.io/klog/v2"
 )
 
@@ -48,6 +50,16 @@ func (m *Manager) GetLLMTools() []llms.Tool {
 	return llmTools
 }
 
+// GetToolNames returns the names of all tools.
+func (m *Manager) GetToolNames() []string {
+	names := make([]string, 0, len(m.tools))
+	for name := range m.tools {
+		names = append(names, name)
+	}
+
+	return names
+}
+
 // ExecuteToolCalls executes the tool calls in the response and returns the new messages.
 // If the response does not contain any tool calls, it returns an empty slice.
 func (m *Manager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentResponse) []llms.MessageContent {
@@ -77,7 +89,8 @@ func (m *Manager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentRespon
 			newMessages = append(newMessages, llms.MessageContent{
 				Role: llms.ChatMessageTypeTool,
 				Parts: []llms.ContentPart{
-					tool.Call(ctx, &toolCall),
+					tool.Call(ctx, &toolCall), // these count as in-parallel calls, therefore history is passed
+					// without appending newMessages
 				}})
 		}
 	}

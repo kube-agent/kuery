@@ -62,6 +62,11 @@ STATICCHECK_VER := 2022.1
 STATICCHECK_BIN := staticcheck
 STATICCHECK := $(TOOLS_GOBIN_DIR)/$(STATICCHECK_BIN)-$(STATICCHECK_VER)
 
+OPENSHIFT_GOIMPORTS_VER := 4cd858e694d7dfa32a2e697e0e4bab245c215cf3
+OPENSHIFT_GOIMPORTS_BIN := openshift-goimports
+OPENSHIFT_GOIMPORTS := $(TOOLS_DIR)/$(OPENSHIFT_GOIMPORTS_BIN)-$(OPENSHIFT_GOIMPORTS_VER)
+export OPENSHIFT_GOIMPORTS # so hack scripts can use it
+
 GIT_COMMIT := $(shell git rev-parse --short HEAD || echo 'local')
 GIT_DIRTY := $(shell git diff --quiet && echo 'clean' || echo 'dirty')
 GIT_VERSION := $(shell go mod edit -json | jq '.Require[] | select(.Path == "k8s.io/client-go") | .Version' --raw-output)
@@ -279,6 +284,13 @@ verify-boilerplate: $(TOOLS_DIR)/verify_boilerplate.py
 .PHONY: verify-codegen
 verify-codegen:
 	./hack/verify-codegen.sh
+
+$(OPENSHIFT_GOIMPORTS):
+	GOBIN=$(TOOLS_GOBIN_DIR) $(GO_INSTALL) github.com/openshift-eng/openshift-goimports $(OPENSHIFT_GOIMPORTS_BIN) $(OPENSHIFT_GOIMPORTS_VER)
+
+.PHONY: imports
+imports: $(OPENSHIFT_GOIMPORTS) verify-go-versions
+	$(OPENSHIFT_GOIMPORTS) -m github.com/kube-agent/kuery
 
 .PHONY: verify-imports
 verify-imports:

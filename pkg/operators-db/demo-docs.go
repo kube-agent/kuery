@@ -2,6 +2,7 @@ package operators_db
 
 import (
 	"fmt"
+
 	"github.com/tmc/langchaingo/schema"
 )
 

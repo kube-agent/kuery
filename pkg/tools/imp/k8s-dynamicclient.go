@@ -4,12 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/tmc/langchaingo/llms"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
+
+	"github.com/kube-agent/kuery/pkg/tools"
 )
+
+var _ tools.Tool = &K8sDynamicClient{}
 
 // K8sDynamicClient implements the Tool interface for the K8s dynamic client.
 type K8sDynamicClient struct {

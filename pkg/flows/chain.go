@@ -1,8 +1,9 @@
 package flows
 
 import (
-	"github.com/kube-agent/kuery/pkg/flows/steps"
 	"slices"
+
+	"github.com/kube-agent/kuery/pkg/flows/steps"
 )
 
 // Chain is a chain of steps.
