@@ -44,7 +44,7 @@ When running multi-step plans, make sure to ask the user for permission before e
 func setupLLM(ctx context.Context) (llms.Model, error) {
 	logger := klog.FromContext(ctx)
 	llm := os.Getenv("LLM")
-	// check if openai api key is set
+
 	if llm == "OPENAI" {
 		logger.Info("Using OpenAI LLM", "model", gptModel)
 		return openai.New(openai.WithModel(gptModel))
@@ -55,7 +55,7 @@ func setupLLM(ctx context.Context) (llms.Model, error) {
 		return anthropic.New(anthropic.WithModel(anthropicModel))
 	}
 
-	return nil, fmt.Errorf("no API key found")
+	return nil, fmt.Errorf("LLM provider not set or invalid: %s", llm)
 }
 
 func main() {

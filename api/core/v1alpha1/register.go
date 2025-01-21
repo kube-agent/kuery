@@ -39,8 +39,8 @@ func Resource(resource string) schema.GroupResource {
 
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
-		&StagedBindingPolicy{},
-		&StagedBindingPolicyList{},
+		&KueryFlow{},
+		&KueryFlowList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
