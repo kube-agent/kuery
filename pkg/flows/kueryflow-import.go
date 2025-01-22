@@ -188,8 +188,6 @@ func (t *importKueryFlowTool) createToolStep(step corev1alpha1.Step) steps.Step 
 		})
 	}
 
-	fmt.Printf("adding step with text: %v\n", fmt.Sprint("Execute the following tool-call:\n%v",
-		*step.FunctionCall))
 	// in this case we can simply create a tool step
 	return steps.NewHumanStep(func(_ context.Context) string {
 		return fmt.Sprintf("Execute the following tool-call:\n%v", *step.FunctionCall)
