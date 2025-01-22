@@ -96,3 +96,14 @@ func (c *chain) Reset() Chain {
 
 	return c
 }
+
+// GetSteps returns the steps within the chain.
+// There are no guarantees that the chain will not be mutated after this call.
+func (c *chain) GetSteps() []steps.Step {
+	stepsSlice := make([]steps.Step, len(c.steps))
+	for i, step := range c.steps {
+		stepsSlice[i] = step.Step
+	}
+
+	return stepsSlice
+}

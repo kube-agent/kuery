@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/tmc/langchaingo/llms"
 
@@ -12,12 +13,15 @@ import (
 // to work with them.
 type Manager struct {
 	tools map[string]Tool
+
+	nextCallID int
 }
 
 // NewManager creates a new tool manager.
 func NewManager() *Manager {
 	return &Manager{
-		tools: make(map[string]Tool),
+		tools:      make(map[string]Tool),
+		nextCallID: 1,
 	}
 }
 
@@ -62,7 +66,8 @@ func (m *Manager) GetToolNames() []string {
 
 // ExecuteToolCalls executes the tool calls in the response and returns the new messages.
 // If the response does not contain any tool calls, it returns an empty slice.
-func (m *Manager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentResponse) []llms.MessageContent {
+func (m *Manager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentResponse,
+	toolCallCache map[string]llms.ToolCall) []llms.MessageContent {
 	newMessages := make([]llms.MessageContent, 0)
 	logger := klog.FromContext(ctx)
 	for _, choice := range resp.Choices {
@@ -74,9 +79,12 @@ func (m *Manager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentRespon
 			}
 
 			// append tool use
+			toolCallCache[fmt.Sprintf("%s", m.nextCallID)] = toolCall // safe since execution blocks Kuery
+
 			newMessages = append(newMessages, llms.MessageContent{
 				Role: llms.ChatMessageTypeAI,
 				Parts: []llms.ContentPart{
+					llms.TextPart(fmt.Sprintf("Executing Tool-Call %s, ID: %s", tool.Name(), m.nextCallID)),
 					llms.ToolCall{
 						ID:   toolCall.ID,
 						Type: toolCall.Type,
@@ -92,6 +100,8 @@ func (m *Manager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentRespon
 					tool.Call(ctx, &toolCall), // these count as in-parallel calls, therefore history is passed
 					// without appending newMessages
 				}})
+
+			m.nextCallID++
 		}
 	}
 

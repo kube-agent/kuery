@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	corev1alpha1 "github.com/kube-agent/kuery/api/core/v1alpha1"
-	clientset "github.com/kube-agent/kuery/pkg/generated/clientset/versioned"
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/tmc/langchaingo/llms"
 
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	corev1alpha1 "github.com/kube-agent/kuery/api/core/v1alpha1"
+	clientset "github.com/kube-agent/kuery/pkg/generated/clientset/versioned"
 	"github.com/kube-agent/kuery/pkg/tools"
 )
 
@@ -18,9 +19,10 @@ var _ tools.Tool = &exportKueryFlowTool{}
 
 // exportKueryFlowTool is a tool that can can export a KueryFlow from a
 // conversation.
-// TODO: make tool use history to infer the flow as a side-quest.
+// TODO: make flow extraction more deterministic by having the model choose steps from history instead of building KF object.
 type exportKueryFlowTool struct {
-	client clientset.Interface
+	client        clientset.Interface
+	toolCallCache map[string]llms.ToolCall
 }
 
 func (t *exportKueryFlowTool) Name() string {
@@ -33,21 +35,23 @@ func (t *exportKueryFlowTool) LLMTool() *llms.Tool {
 		Function: &llms.FunctionDefinition{
 			Name: t.Name(),
 			Description: `ExportKueryFlow is a tool that is used to export a KueryFlow from the active conversation.
-							A KueryFlow is a CR that contains a sequence of steps. A step can be of type:
-							- human: a step requiring human intervention. ONLY contextForHuman field must be set for this type.
-							- ai: a step executed by Kuery. ONLY the aiPrompt field must be set for this type.
-							- tool: a step executed by a tool. The functionCall field must be set for this type.
+							A KueryFlow is a CR that contains a sequence of tool-calls. An exported KueryFlow can be
+							later executed using the ImportKueryFlow tool.
 
-							VERY IMPORTANT: Before exporting a KueryFlow, ensure that the user is aware of the steps 
-							involved and ask for their agreement first. A step of type 'tool' may involve a function 
-							call description with arguments that should be recalculated during later execution.`,
+							A flow of tool-calls may be completely deterministic if it contains concrete argument values,
+							or indeterministic if it contains arguments that should be recalculated upon execution.
+
+							YOU SHOULD ALWAYS ALWAYS PREFER deterministic tool-calls when possible.
+							Let the user know of the steps you intend to include in natural language and get approval
+							before actually exporting.`,
 
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"name": map[string]interface{}{
-						"type":        "string",
-						"description": "The name of the KueryFlow object to be exported.",
+						"type": "string",
+						"description": `The name of the KueryFlow object to be exported.
+										Prefer short, lowercase and precise names, recall kubernetes naming conventions`,
 					},
 					"namespace": map[string]interface{}{
 						"type":        "string",
@@ -55,46 +59,25 @@ func (t *exportKueryFlowTool) LLMTool() *llms.Tool {
 					},
 					"steps": map[string]interface{}{
 						"type":        "array",
-						"description": "The steps to export for later execution upon call with ExecuteKueryFlow.",
+						"description": "The steps in the flow.",
 						"items": map[string]interface{}{
 							"type": "object",
 							"properties": map[string]interface{}{
-								"type": map[string]interface{}{
-									"type":        "string",
-									"description": "The type of the step. Must be one of 'human', 'ai', or 'tool'.",
-									"enum":        []string{"human", "ai", "tool"},
+								"toolCallID": map[string]interface{}{
+									"type": "string",
+									"description": `The ID of the tool-call in the history. It is prefixed by 'call_' in
+													an [ai] message that invokes a toolcall. Its format is call_<hash>.
+													IT HAS TO BE AN ID FROM ONE OF THE MESSAGES.`,
 								},
-								"contextForHuman": map[string]interface{}{
-									"type":        "string",
-									"description": "A human-readable description of the step for 'human' steps.",
-								},
-								"aiPrompt": map[string]interface{}{
-									"type":        "string",
-									"description": "The prompt to send to the AI model for 'ai' steps.",
-								},
-								"functionCall": map[string]interface{}{
-									"type": "object",
-									"properties": map[string]interface{}{
-										"name": map[string]interface{}{
-											"type":        "string",
-											"description": "The name of the function to execute.",
-										},
-										"arguments": map[string]interface{}{
-											"type":        "object",
-											"description": "Arguments to pass to the function. May include 'RECALCULATE' placeholders.",
-										},
-										"argsToRecalculate": map[string]interface{}{
-											"type": "array",
-											"items": map[string]interface{}{
-												"type": "string",
-											},
-											"description": "List of argument names to recalculate.",
-										},
+								"argsToRecalculate": map[string]interface{}{
+									"type": "array",
+									"items": map[string]interface{}{
+										"type": "string",
 									},
-									"required": []string{"name"},
+									"description": `A list of the names of arguments that should be recalculated upon execution.`,
 								},
 							},
-							"required": []string{"type"}, // 'type' is required for every step.
+							"required": []string{"toolCallID"},
 						},
 					},
 				},
@@ -104,10 +87,15 @@ func (t *exportKueryFlowTool) LLMTool() *llms.Tool {
 	}
 }
 
+type toolCallRef struct {
+	ID                string   `json:"toolCallID"`
+	ArgsToRecalculate []string `json:"argsToRecalculate"`
+}
+
 type exportCallArgs struct {
-	Name      string              `json:"name"`
-	Namespace string              `json:"namespace"`
-	Steps     []corev1alpha1.Step `json:"steps"`
+	Name      string        `json:"name"`
+	Namespace string        `json:"namespace"`
+	Steps     []toolCallRef `json:"steps"`
 }
 
 func (t *exportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
@@ -137,13 +125,27 @@ func (t *exportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 }
 
 func (t *exportKueryFlowTool) createUpdateKueryFlow(ctx context.Context, args *exportCallArgs) error {
+	var kfSteps []corev1alpha1.Step
+
+	for _, step := range args.Steps {
+		call, ok := t.toolCallCache[step.ID]
+		if !ok {
+			return fmt.Errorf("tool call not found: %v", step.ID)
+		}
+
+		kfSteps = append(kfSteps, corev1alpha1.Step{
+			FunctionCall:      call.FunctionCall,
+			ArgsToRecalculate: step.ArgsToRecalculate,
+		})
+	}
+
 	kueryFlow := &corev1alpha1.KueryFlow{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      args.Name,
 			Namespace: args.Namespace,
 		},
 		Spec: corev1alpha1.KueryFlowSpec{
-			Steps: args.Steps,
+			Steps: kfSteps,
 		},
 	}
 
