@@ -228,3 +228,9 @@ func (k *K8sDynamicClient) interactWithClient(ctx context.Context, operation str
 
 	return "", fmt.Errorf("unsupported operation: %v", operation)
 }
+
+// RequiresExplaining returns whether the tool requires explaining after
+// execution.
+func (k *K8sDynamicClient) RequiresExplaining() bool {
+	return true
+}

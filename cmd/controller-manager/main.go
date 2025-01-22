@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 
-	helmclient "github.com/mittwald/go-helm-client"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/anthropic"
 	"github.com/tmc/langchaingo/llms/openai"
@@ -112,30 +111,4 @@ func setupToolsMgr(ctx context.Context, cfg *rest.Config) *tools.Manager {
 	}
 
 	return tools.NewManager().WithTools(callables)
-}
-
-// does not work ATM.
-func initHelm(ctx context.Context, cfg *rest.Config, callables *[]tools.Tool) {
-	logger := klog.FromContext(ctx)
-
-	opt := &helmclient.RestConfClientOptions{
-		Options: &helmclient.Options{
-			Namespace:        "default", // Change this to the namespace you wish the client to operate in.
-			RepositoryCache:  "/tmp/.helmcache",
-			RepositoryConfig: "/tmp/.helmrepo",
-			Debug:            true,
-			Linting:          true, // Change this to false if you don't want linting.
-			DebugLog: func(format string, v ...interface{}) {
-				logger.Info(format, v...)
-			},
-		},
-		RestConfig: cfg,
-	}
-
-	helmClient, err := helmclient.NewClientFromRestConf(opt)
-	if err != nil {
-		klog.Error(err, "Failed to create Helm client, Helm tools won't be enabled")
-	} else {
-		*callables = append(*callables, &imp.HelmTool{helmClient})
-	}
 }

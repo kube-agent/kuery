@@ -72,11 +72,16 @@ func (m *Manager) GetToolNames() []string {
 	return names
 }
 
-// ExecuteToolCalls executes the tool calls in the response and returns the new messages.
-// If the response does not contain any tool calls, it returns an empty slice.
-func (m *Manager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentResponse) []llms.MessageContent {
+// ExecuteToolCalls executes the tool calls in the response and returns:
+// - The new messages
+// - A boolean indicating whether the response requires further processing (LLMStep).
+//
+// If the response does not contain any tool calls, it returns an empty slice with false.
+func (m *Manager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentResponse) ([]llms.MessageContent, bool) {
 	newMessages := make([]llms.MessageContent, 0)
 	logger := klog.FromContext(ctx)
+	requireFurtherProcessing := false
+
 	for _, choice := range resp.Choices {
 		for _, toolCall := range choice.ToolCalls {
 			tool := m.GetTool(toolCall.FunctionCall.Name)
@@ -85,6 +90,7 @@ func (m *Manager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentRespon
 				continue
 			}
 
+			requireFurtherProcessing = requireFurtherProcessing || tool.RequiresExplaining()
 			// append tool use
 			m.toolCallCache[fmt.Sprintf("%d", m.nextCallID)] = toolCall // safe since execution blocks Kuery
 
@@ -112,5 +118,5 @@ func (m *Manager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentRespon
 		}
 	}
 
-	return newMessages
+	return newMessages, requireFurtherProcessing
 }

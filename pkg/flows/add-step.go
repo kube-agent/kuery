@@ -78,3 +78,9 @@ func (t *addStepTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.To
 		Content:    "Added AI step with prompt: " + args.Prompt,
 	}
 }
+
+// RequiresExplaining returns whether the tool requires explaining after
+// execution.
+func (t *addStepTool) RequiresExplaining() bool {
+	return false // adds a step to the chain, no need to explain
+}

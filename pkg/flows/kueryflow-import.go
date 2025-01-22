@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/kr/pretty"
 	"github.com/tmc/langchaingo/llms"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -130,7 +129,7 @@ func (t *importKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 		return llms.ToolCallResponse{
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
-			Content:    fmt.Sprintf("executed KueryFlow: %v", kueryFlow.Name),
+			Content:    fmt.Sprintf("loaded KueryFlow steps: %v", kueryFlow.Name),
 		}
 
 	default:
@@ -140,6 +139,12 @@ func (t *importKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 			Content:    fmt.Sprintf("unknown operation: %v", args.Operation),
 		}
 	}
+}
+
+// RequiresExplaining returns whether the tool requires explaining after
+// execution.
+func (t *importKueryFlowTool) RequiresExplaining() bool {
+	return false
 }
 
 func (t *importKueryFlowTool) listKueryFlows(ctx context.Context, namespace string) ([]corev1alpha1.KueryFlow, error) {
@@ -164,7 +169,8 @@ func (t *importKueryFlowTool) appendKueryFlowToChain(kueryFlow *corev1alpha1.Kue
 	// iterate in reverse order to append steps in the correct order
 	for i := len(kueryFlow.Spec.Steps) - 1; i >= 0; i-- {
 		step := kueryFlow.Spec.Steps[i]
-		t.chain.PushNext(t.createToolStep(step), true)
+		t.chain.PushNext(steps.NewLLMStep(t.llm), true) // LLM step to handle the tool step
+		t.chain.PushNext(t.createToolStep(step), true)  // this will execute before the above
 	}
 }
 
@@ -177,13 +183,15 @@ func (t *importKueryFlowTool) createToolStep(step corev1alpha1.Step) steps.Step 
 	if len(step.ArgsToRecalculate) > 0 {
 		// in this case we need to add an instructional AI step to possibly start a chain of recalculations
 		// to figure out the correct values for the arguments
-		return steps.NewLLMStep(t.llm).WithHistory([]llms.MessageContent{
-			llms.TextParts(llms.ChatMessageTypeAI, pretty.Sprint("%s:\n%v", toolStepContext, *step.FunctionCall))}, false)
+		return steps.NewHumanStep(func(_ context.Context) string {
+			return fmt.Sprintf("%s:\n%v", toolStepContext, *step.FunctionCall)
+		})
 	}
 
+	fmt.Printf("adding step with text: %v\n", fmt.Sprint("Execute the following tool-call:\n%v",
+		*step.FunctionCall))
 	// in this case we can simply create a tool step
-	return steps.NewLLMStep(t.llm).WithHistory([]llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeAI, pretty.Sprint("Execute the following tool-call:\n%v",
-			*step.FunctionCall))}, false)
-
+	return steps.NewHumanStep(func(_ context.Context) string {
+		return fmt.Sprintf("Execute the following tool-call:\n%v", *step.FunctionCall)
+	})
 }

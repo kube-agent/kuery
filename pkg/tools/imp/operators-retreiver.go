@@ -78,3 +78,9 @@ func (ort *OperatorsRAGTool) Call(ctx context.Context, toolCall *llms.ToolCall) 
 		Content:    operators_db.OperatorSchemasToString(schemas),
 	}
 }
+
+// RequiresExplaining returns whether the tool requires explaining after
+// execution.
+func (ort *OperatorsRAGTool) RequiresExplaining() bool {
+	return true
+}

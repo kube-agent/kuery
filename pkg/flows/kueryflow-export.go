@@ -109,7 +109,7 @@ func (t *exportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 		}
 	}
 
-	if err := t.createUpdateKueryFlow(ctx, &args); err != nil {
+	if err := t.createOrUpdateKueryFlow(ctx, &args); err != nil {
 		return llms.ToolCallResponse{
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
@@ -124,7 +124,13 @@ func (t *exportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 	}
 }
 
-func (t *exportKueryFlowTool) createUpdateKueryFlow(ctx context.Context, args *exportCallArgs) error {
+// RequiresExplaining returns whether the tool requires explaining after
+// execution.
+func (t *exportKueryFlowTool) RequiresExplaining() bool {
+	return true
+}
+
+func (t *exportKueryFlowTool) createOrUpdateKueryFlow(ctx context.Context, args *exportCallArgs) error {
 	var kfSteps []corev1alpha1.Step
 
 	for _, step := range args.Steps {

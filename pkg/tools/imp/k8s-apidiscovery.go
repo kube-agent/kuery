@@ -83,3 +83,9 @@ func (t *K8sAPIDiscoveryTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 		Content:    crd,
 	}
 }
+
+// RequiresExplaining returns whether the tool requires explaining after
+// execution.
+func (t *K8sAPIDiscoveryTool) RequiresExplaining() bool {
+	return true
+}

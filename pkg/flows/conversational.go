@@ -123,15 +123,14 @@ func (f *ConversationalFlow) execute(ctx context.Context,
 		}
 
 		history = appendHistory(ctx, history, step.ToMessageContent(response))
-		// execute tool calls (if any) and add to history
-		toolsUsed := false
-		for _, msg := range f.toolMgr.ExecuteToolCalls(ctx, response) { // this could potentially add a step
+
+		msgs, requiresClarificationStep := f.toolMgr.ExecuteToolCalls(ctx, response)
+		for _, msg := range msgs { // this could potentially add a step
 			logger.V(4).Info("Tool Used", "content", msg.Parts)
 			history = appendHistory(ctx, history, msg)
-			toolsUsed = true
 		}
 
-		if toolsUsed { // add AI step to answer
+		if requiresClarificationStep {
 			logger.V(4).Info("Added AI Step")
 			f.chain.PushNext(steps.NewLLMStep(f.llm), true)
 		}

@@ -14,4 +14,7 @@ type Tool interface {
 	LLMTool() *llms.Tool
 	// Call executes the tool call and returns the response.
 	Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse
+	// RequiresExplaining returns whether the tool requires explaining after
+	// execution.
+	RequiresExplaining() bool
 }
