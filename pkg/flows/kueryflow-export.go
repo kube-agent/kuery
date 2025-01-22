@@ -21,8 +21,9 @@ var _ tools.Tool = &exportKueryFlowTool{}
 // conversation.
 // TODO: make flow extraction more deterministic by having the model choose steps from history instead of building KF object.
 type exportKueryFlowTool struct {
-	client        clientset.Interface
-	toolCallCache map[string]llms.ToolCall
+	client clientset.Interface
+	// toolCallGetter is a function that can get a tool-call by ID.
+	toolCallGetter func(string) (*llms.ToolCall, bool)
 }
 
 func (t *exportKueryFlowTool) Name() string {
@@ -65,9 +66,8 @@ func (t *exportKueryFlowTool) LLMTool() *llms.Tool {
 							"properties": map[string]interface{}{
 								"toolCallID": map[string]interface{}{
 									"type": "string",
-									"description": `The ID of the tool-call in the history. It is prefixed by 'call_' in
-													an [ai] message that invokes a toolcall. Its format is call_<hash>.
-													IT HAS TO BE AN ID FROM ONE OF THE MESSAGES.`,
+									"description": `The ID of the tool-call in the history.
+													Typically a tool-call is prefixed with: "Executing Tool-Call <name>, ID: <id>"`,
 								},
 								"argsToRecalculate": map[string]interface{}{
 									"type": "array",
@@ -128,7 +128,7 @@ func (t *exportKueryFlowTool) createUpdateKueryFlow(ctx context.Context, args *e
 	var kfSteps []corev1alpha1.Step
 
 	for _, step := range args.Steps {
-		call, ok := t.toolCallCache[step.ID]
+		call, ok := t.toolCallGetter(step.ID)
 		if !ok {
 			return fmt.Errorf("tool call not found: %v", step.ID)
 		}

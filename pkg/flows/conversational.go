@@ -23,8 +23,6 @@ type ConversationalFlow struct {
 	toolMgr *tools.Manager
 
 	systemPrompt string
-
-	toolCallCache map[string]llms.ToolCall
 }
 
 // NewConversationalFlow creates a new conversational flow.
@@ -47,7 +45,8 @@ func NewConversationalFlow(systemPrompt string, llm llms.Model, toolMgr *tools.M
 			}
 
 			exportKueryFlowTool := exportKueryFlowTool{
-				client: coreClient,
+				client:         coreClient,
+				toolCallGetter: toolMgr.GetToolCall,
 			}
 
 			toolMgr = toolMgr.WithTools([]tools.Tool{
@@ -60,11 +59,10 @@ func NewConversationalFlow(systemPrompt string, llm llms.Model, toolMgr *tools.M
 	}
 
 	return &ConversationalFlow{
-		llm:           llm,
-		chain:         chain,
-		toolMgr:       toolMgr.WithTool(&planner),
-		systemPrompt:  systemPrompt,
-		toolCallCache: make(map[string]llms.ToolCall),
+		llm:          llm,
+		chain:        chain,
+		toolMgr:      toolMgr.WithTool(&planner),
+		systemPrompt: systemPrompt,
 	}
 }
 
@@ -127,7 +125,7 @@ func (f *ConversationalFlow) execute(ctx context.Context,
 		history = appendHistory(ctx, history, step.ToMessageContent(response))
 		// execute tool calls (if any) and add to history
 		toolsUsed := false
-		for _, msg := range f.toolMgr.ExecuteToolCalls(ctx, response, f.toolCallCache) { // this could potentially add a step
+		for _, msg := range f.toolMgr.ExecuteToolCalls(ctx, response) { // this could potentially add a step
 			logger.V(4).Info("Tool Used", "content", msg.Parts)
 			history = appendHistory(ctx, history, msg)
 			toolsUsed = true
