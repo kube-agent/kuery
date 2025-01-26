@@ -6,37 +6,44 @@ import (
 	"github.com/kube-agent/kuery/pkg/tools"
 
 	"github.com/tmc/langchaingo/llms"
-
-	"k8s.io/klog/v2"
 )
 
 // ToolManager holds all available tools and streamlines operating them.
 type ToolManager struct {
-	tools map[string]tools.Tool
+	maxRetries int
+	tools      map[string]tools.Tool
 
 	toolCallCache map[string]llms.ToolCall
 	nextCallID    int
+
+	toolApprovals map[string]bool
 }
 
 // NewToolManager creates a new ToolManager.
-func NewToolManager() *ToolManager {
+func NewToolManager(maxRetries int) *ToolManager {
 	return &ToolManager{
+		maxRetries:    maxRetries,
 		tools:         make(map[string]tools.Tool),
 		toolCallCache: make(map[string]llms.ToolCall),
 		nextCallID:    1,
+		toolApprovals: make(map[string]bool),
 	}
 }
 
 // WithTool adds a tool to the manager.
 func (m *ToolManager) WithTool(tool tools.Tool) *ToolManager {
 	m.tools[tool.Name()] = tool
+	if tool.RequiresApproval() {
+		m.toolApprovals[tool.Name()] = false
+	}
+
 	return m
 }
 
 // WithTools adds multiple tools to the manager.
 func (m *ToolManager) WithTools(tools []tools.Tool) *ToolManager {
 	for _, tool := range tools {
-		m.tools[tool.Name()] = tool
+		m.WithTool(tool)
 	}
 	return m
 }
@@ -45,11 +52,6 @@ func (m *ToolManager) WithTools(tools []tools.Tool) *ToolManager {
 func (m *ToolManager) GetToolCall(id string) (*llms.ToolCall, bool) {
 	toolCall, ok := m.toolCallCache[id]
 	return &toolCall, ok
-}
-
-// GetTool returns the tool with the given name.
-func (m *ToolManager) GetTool(name string) tools.Tool {
-	return m.tools[name]
 }
 
 // GetLLMTools returns all tools as LLM tools.
@@ -79,25 +81,13 @@ func (m *ToolManager) GetToolNames() []string {
 // If the response does not contain any tool calls, it returns an empty slice with false.
 func (m *ToolManager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentResponse) ([]llms.MessageContent, bool) {
 	newMessages := make([]llms.MessageContent, 0)
-	logger := klog.FromContext(ctx)
 	requireFurtherProcessing := false
 
 	for _, choice := range resp.Choices {
 		for _, toolCall := range choice.ToolCalls {
-			tool := m.GetTool(toolCall.FunctionCall.Name)
-			if tool == nil {
-				logger.Info("tool not found", "toolCall", toolCall)
-				continue
-			}
-
-			requireFurtherProcessing = requireFurtherProcessing || tool.RequiresExplaining()
-			// append tool use
-			m.toolCallCache[fmt.Sprintf("%d", m.nextCallID)] = toolCall // safe since execution blocks Kuery
-
-			newMessages = append(newMessages, llms.MessageContent{
+			newMessages = append(newMessages, llms.MessageContent{ // tool call message is always appended
 				Role: llms.ChatMessageTypeAI,
 				Parts: []llms.ContentPart{
-					llms.TextPart(fmt.Sprintf("Executing Tool-Call %s, ID: %d", tool.Name(), m.nextCallID)),
 					llms.ToolCall{
 						ID:   toolCall.ID,
 						Type: toolCall.Type,
@@ -106,17 +96,75 @@ func (m *ToolManager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentRe
 							Arguments: toolCall.FunctionCall.Arguments,
 						},
 					}}})
+
+			toolCallResponse, blocked, requiresExplaining := m.callTool(ctx, &toolCall)
+			if blocked {
+				newMessages = append(newMessages, llms.MessageContent{
+					Role: llms.ChatMessageTypeTool,
+					Parts: []llms.ContentPart{
+						llms.TextPart(fmt.Sprintf("Tool-Call %s blocked: %s\n", toolCall.FunctionCall.Name,
+							toolCallResponse.Content)),
+					}})
+				continue
+			}
+
+			requireFurtherProcessing = requireFurtherProcessing || requiresExplaining
+
 			// append tool response
 			newMessages = append(newMessages, llms.MessageContent{
 				Role: llms.ChatMessageTypeTool,
 				Parts: []llms.ContentPart{
-					tool.Call(ctx, &toolCall), // these count as in-parallel calls, therefore history is passed
-					// without appending newMessages
-				}})
+					llms.TextPart(fmt.Sprintf("[ID: %d] Tool-Call %s executed\n",
+						m.nextCallID, toolCall.FunctionCall.Name)),
+					toolCallResponse}})
 
+			// save tool use
+			m.toolCallCache[fmt.Sprintf("%d", m.nextCallID)] = toolCall // safe since execution blocks Kuery
 			m.nextCallID++
 		}
 	}
 
 	return newMessages, requireFurtherProcessing
+}
+
+// getTool returns the tool with the given name.
+func (m *ToolManager) getTool(name string) tools.Tool {
+	return m.tools[name]
+}
+
+// callTool calls the tool with the given tool call, if conditions allow.
+// The returned tuple consists of:
+// - The tool call response
+// - A boolean indicating whether the tool call was successful or blocked
+// - A boolean indicating whether the tool call requires explaining
+//
+// If a toolcall is blocked, the response would contain the reason.
+func (m *ToolManager) callTool(ctx context.Context, toolCall *llms.ToolCall) (llms.ToolCallResponse, bool, bool) {
+	tool := m.getTool(toolCall.FunctionCall.Name)
+	if tool == nil {
+		return llms.ToolCallResponse{
+			ToolCallID: toolCall.ID,
+			Name:       toolCall.FunctionCall.Name,
+			Content:    fmt.Sprintf("tool not found: %s", toolCall.FunctionCall.Name),
+		}, false, false
+	}
+
+	if tool.GetFailedCallCount(toolCall) >= m.maxRetries {
+		return llms.ToolCallResponse{
+			ToolCallID: toolCall.ID,
+			Name:       toolCall.FunctionCall.Name,
+			Content:    "tool has reached the maximum number of consecutive runs. Context should return to the user.",
+		}, false, false
+	} // this must be first to block AI retries in explanation windows
+
+	if tool.RequiresApproval() && !m.toolApprovals[tool.Name()] {
+		return llms.ToolCallResponse{
+			ToolCallID: toolCall.ID,
+			Name:       toolCall.FunctionCall.Name,
+			Content:    "tool requires explicit user approval before execution",
+		}, false, tool.RequiresExplaining()
+	}
+
+	response, ok := tool.Call(ctx, toolCall)
+	return response, ok, tool.RequiresExplaining()
 }
