@@ -1,4 +1,4 @@
-package imp
+package tools
 
 import (
 	"context"
@@ -8,14 +8,20 @@ import (
 	"github.com/tmc/langchaingo/llms"
 
 	crd_discovery "github.com/kube-agent/kuery/pkg/crd-discovery"
-	"github.com/kube-agent/kuery/pkg/tools"
 )
 
-var _ tools.Tool = &K8sAPIDiscoveryTool{}
+var _ Tool = &K8sAPIDiscoveryTool{}
 
 // K8sAPIDiscoveryTool is a tool that interacts with a vector-db of discovered APIs.
 type K8sAPIDiscoveryTool struct {
-	crd_discovery.APIDiscovery
+	retriever crd_discovery.APIDiscovery
+}
+
+// NewK8sAPIDiscoveryTool creates a new K8sAPIDiscoveryTool.
+func NewK8sAPIDiscoveryTool(retriever crd_discovery.APIDiscovery) *K8sAPIDiscoveryTool {
+	return &K8sAPIDiscoveryTool{
+		retriever: retriever,
+	}
 }
 
 func (t *K8sAPIDiscoveryTool) Name() string {
@@ -62,7 +68,7 @@ func (t *K8sAPIDiscoveryTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 		}
 	}
 
-	crds, err := t.APIDiscovery.RetrieveCRDs(ctx, args.Prompt)
+	crds, err := t.retriever.RetrieveCRDs(ctx, args.Prompt)
 	if err != nil {
 		return llms.ToolCallResponse{
 			ToolCallID: toolCall.ID,

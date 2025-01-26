@@ -1,11 +1,11 @@
-package flows
+package controller
 
 import (
 	"context"
 	"fmt"
-
 	"github.com/fatih/color"
 	"github.com/kr/pretty"
+	"github.com/kube-agent/kuery/pkg/flows"
 	"github.com/tmc/langchaingo/llms"
 
 	"k8s.io/client-go/rest"
@@ -19,7 +19,7 @@ import (
 // ConversationalFlow implements flow for pure-conversation flows.
 type ConversationalFlow struct {
 	llm     llms.Model
-	chain   Chain
+	chain   flows.Chain
 	toolMgr *tools.Manager
 
 	systemPrompt string
@@ -28,30 +28,20 @@ type ConversationalFlow struct {
 // NewConversationalFlow creates a new conversational flow.
 func NewConversationalFlow(systemPrompt string, llm llms.Model, toolMgr *tools.Manager,
 	cfg *rest.Config) *ConversationalFlow {
-	chain := NewChain(nil)
+	chain := flows.NewChain(nil)
 
-	planner := addStepTool{
-		chain: chain,
-		llm:   llm,
-	}
+	planner := tools.NewAddStepTool(chain, llm)
 
 	if cfg != nil {
 		coreClient, err := clientset.NewForConfig(cfg)
 		if err == nil {
-			importKueryFlowTool := importKueryFlowTool{
-				client: coreClient,
-				chain:  chain,
-				llm:    llm,
-			}
+			importKueryFlowTool := tools.NewImportKueryFlowTool(coreClient, chain, llm)
 
-			exportKueryFlowTool := exportKueryFlowTool{
-				client:         coreClient,
-				toolCallGetter: toolMgr.GetToolCall,
-			}
+			exportKueryFlowTool := tools.NewExportKueryFlowTool(coreClient, toolMgr.GetToolCall)
 
 			toolMgr = toolMgr.WithTools([]tools.Tool{
-				&importKueryFlowTool,
-				&exportKueryFlowTool,
+				importKueryFlowTool,
+				exportKueryFlowTool,
 			})
 		} else {
 			klog.Error("failed to create core client", "error", err)
@@ -61,7 +51,7 @@ func NewConversationalFlow(systemPrompt string, llm llms.Model, toolMgr *tools.M
 	return &ConversationalFlow{
 		llm:          llm,
 		chain:        chain,
-		toolMgr:      toolMgr.WithTool(&planner),
+		toolMgr:      toolMgr.WithTool(planner),
 		systemPrompt: systemPrompt,
 	}
 }

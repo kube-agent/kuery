@@ -1,9 +1,10 @@
-package flows
+package tools
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/kube-agent/kuery/pkg/flows"
 
 	"github.com/tmc/langchaingo/llms"
 
@@ -14,19 +15,28 @@ import (
 	clientset "github.com/kube-agent/kuery/pkg/generated/clientset/versioned"
 )
 
-// importKueryFlowTool is a tool that can get or execute a KueryFlow object.
+// ImportKueryFlowTool is a tool that can get or execute a KueryFlow object.
 // TODO: think of execution modes, add side-quests for recalcing missing step args.
-type importKueryFlowTool struct {
+type ImportKueryFlowTool struct {
 	client clientset.Interface
-	chain  Chain
+	chain  flows.Chain
 	llm    llms.Model
 }
 
-func (t *importKueryFlowTool) Name() string {
+// NewImportKueryFlowTool creates a new ImportKueryFlowTool.
+func NewImportKueryFlowTool(client clientset.Interface, chain flows.Chain, llm llms.Model) *ImportKueryFlowTool {
+	return &ImportKueryFlowTool{
+		client: client,
+		chain:  chain,
+		llm:    llm,
+	}
+}
+
+func (t *ImportKueryFlowTool) Name() string {
 	return "ImportKueryFlow"
 }
 
-func (t *importKueryFlowTool) LLMTool() *llms.Tool {
+func (t *ImportKueryFlowTool) LLMTool() *llms.Tool {
 	return &llms.Tool{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
@@ -65,7 +75,7 @@ type importCallArgs struct {
 	Namespace string `json:"namespace"`
 }
 
-func (t *importKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
+func (t *ImportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
 	var args importCallArgs
 
 	if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
@@ -143,11 +153,11 @@ func (t *importKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 
 // RequiresExplaining returns whether the tool requires explaining after
 // execution.
-func (t *importKueryFlowTool) RequiresExplaining() bool {
+func (t *ImportKueryFlowTool) RequiresExplaining() bool {
 	return false
 }
 
-func (t *importKueryFlowTool) listKueryFlows(ctx context.Context, namespace string) ([]corev1alpha1.KueryFlow, error) {
+func (t *ImportKueryFlowTool) listKueryFlows(ctx context.Context, namespace string) ([]corev1alpha1.KueryFlow, error) {
 	kueryFlows, err := t.client.CoreV1alpha1().KueryFlows(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list KueryFlows: %v", err)
@@ -156,7 +166,7 @@ func (t *importKueryFlowTool) listKueryFlows(ctx context.Context, namespace stri
 	return kueryFlows.Items, nil
 }
 
-func (t *importKueryFlowTool) getKueryFlow(ctx context.Context, namespace, name string) (*corev1alpha1.KueryFlow, error) {
+func (t *ImportKueryFlowTool) getKueryFlow(ctx context.Context, namespace, name string) (*corev1alpha1.KueryFlow, error) {
 	kueryFlow, err := t.client.CoreV1alpha1().KueryFlows(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get KueryFlow: %v", err)
@@ -165,7 +175,7 @@ func (t *importKueryFlowTool) getKueryFlow(ctx context.Context, namespace, name 
 	return kueryFlow, nil
 }
 
-func (t *importKueryFlowTool) appendKueryFlowToChain(kueryFlow *corev1alpha1.KueryFlow) {
+func (t *ImportKueryFlowTool) appendKueryFlowToChain(kueryFlow *corev1alpha1.KueryFlow) {
 	// iterate in reverse order to append steps in the correct order
 	for i := len(kueryFlow.Spec.Steps) - 1; i >= 0; i-- {
 		step := kueryFlow.Spec.Steps[i]
@@ -179,7 +189,7 @@ const toolStepContext = `You are required to run the following tool-call (part o
 						Use the 'AddStep' tool in order to instruct your self further to figure out the correct values.
 						If required, you may ask the user to help you figure them out.`
 
-func (t *importKueryFlowTool) createToolStep(step corev1alpha1.Step) steps.Step {
+func (t *ImportKueryFlowTool) createToolStep(step corev1alpha1.Step) steps.Step {
 	if len(step.ArgsToRecalculate) > 0 {
 		// in this case we need to add an instructional AI step to possibly start a chain of recalculations
 		// to figure out the correct values for the arguments

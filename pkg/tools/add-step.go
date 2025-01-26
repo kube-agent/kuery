@@ -1,29 +1,37 @@
-package flows
+package tools
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/kube-agent/kuery/pkg/flows"
 
 	"github.com/tmc/langchaingo/llms"
 
 	"github.com/kube-agent/kuery/pkg/flows/steps"
-	"github.com/kube-agent/kuery/pkg/tools"
 )
 
-var _ tools.Tool = &addStepTool{}
+var _ Tool = &AddStepTool{}
 
-// addStepTool is a tool that can add a step of planning to a given chain.
-type addStepTool struct {
-	chain Chain
+// AddStepTool is a tool that can add a step of planning to a given chain.
+type AddStepTool struct {
+	chain flows.Chain
 	llm   llms.Model
 }
 
-func (t *addStepTool) Name() string {
+// NewAddStepTool creates a new AddStepTool.
+func NewAddStepTool(chain flows.Chain, llm llms.Model) *AddStepTool {
+	return &AddStepTool{
+		chain: chain,
+		llm:   llm,
+	}
+}
+
+func (t *AddStepTool) Name() string {
 	return "AddStep"
 }
 
-func (t *addStepTool) LLMTool() *llms.Tool {
+func (t *AddStepTool) LLMTool() *llms.Tool {
 	return &llms.Tool{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
@@ -47,7 +55,7 @@ func (t *addStepTool) LLMTool() *llms.Tool {
 	}
 }
 
-func (t *addStepTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
+func (t *AddStepTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
 	var args struct {
 		Prompt string `json:"prompt"`
 	}
@@ -81,6 +89,6 @@ func (t *addStepTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.To
 
 // RequiresExplaining returns whether the tool requires explaining after
 // execution.
-func (t *addStepTool) RequiresExplaining() bool {
+func (t *AddStepTool) RequiresExplaining() bool {
 	return false // adds a step to the chain, no need to explain
 }

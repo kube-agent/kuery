@@ -1,4 +1,4 @@
-package imp
+package tools
 
 import (
 	"context"
@@ -11,15 +11,20 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
-
-	"github.com/kube-agent/kuery/pkg/tools"
 )
 
-var _ tools.Tool = &K8sDynamicClient{}
+var _ Tool = &K8sDynamicClient{}
 
 // K8sDynamicClient implements the Tool interface for the K8s dynamic client.
 type K8sDynamicClient struct {
-	Client dynamic.Interface
+	client dynamic.Interface
+}
+
+// NewK8sDynamicClient creates a new K8sDynamicClient.
+func NewK8sDynamicClient(client dynamic.Interface) *K8sDynamicClient {
+	return &K8sDynamicClient{
+		client: client,
+	}
 }
 
 // Name returns the name of the tool.
@@ -123,7 +128,7 @@ func (k *K8sDynamicClient) Call(ctx context.Context, toolCall *llms.ToolCall) ll
 
 // interactWithClient interacts with the Kubernetes API using the go client.
 func (k *K8sDynamicClient) interactWithClient(ctx context.Context, operation string, args dynamicCallArgs) (string, error) {
-	if k.Client == nil {
+	if k.client == nil {
 		return "", fmt.Errorf("kubernetes client is not initialized")
 	}
 
@@ -133,13 +138,13 @@ func (k *K8sDynamicClient) interactWithClient(ctx context.Context, operation str
 		var err error
 
 		if args.Namespace == metav1.NamespaceNone {
-			unstructuredObj, err = k.Client.Resource(schema.GroupVersionResource{
+			unstructuredObj, err = k.client.Resource(schema.GroupVersionResource{
 				Group:    args.Group,
 				Version:  args.Version,
 				Resource: args.Resource,
 			}).Get(ctx, args.Name, metav1.GetOptions{})
 		} else {
-			unstructuredObj, err = k.Client.Resource(schema.GroupVersionResource{
+			unstructuredObj, err = k.client.Resource(schema.GroupVersionResource{
 				Group:    args.Group,
 				Version:  args.Version,
 				Resource: args.Resource,
@@ -157,13 +162,13 @@ func (k *K8sDynamicClient) interactWithClient(ctx context.Context, operation str
 		var err error
 
 		if args.Namespace == metav1.NamespaceNone {
-			unstructuredList, err = k.Client.Resource(schema.GroupVersionResource{
+			unstructuredList, err = k.client.Resource(schema.GroupVersionResource{
 				Group:    args.Group,
 				Version:  args.Version,
 				Resource: args.Resource,
 			}).List(ctx, metav1.ListOptions{})
 		} else {
-			unstructuredList, err = k.Client.Resource(schema.GroupVersionResource{
+			unstructuredList, err = k.client.Resource(schema.GroupVersionResource{
 				Group:    args.Group,
 				Version:  args.Version,
 				Resource: args.Resource,
@@ -186,13 +191,13 @@ func (k *K8sDynamicClient) interactWithClient(ctx context.Context, operation str
 		}
 
 		if args.Namespace == metav1.NamespaceNone {
-			unstructuredObj, err = k.Client.Resource(schema.GroupVersionResource{
+			unstructuredObj, err = k.client.Resource(schema.GroupVersionResource{
 				Group:    args.Group,
 				Version:  args.Version,
 				Resource: args.Resource,
 			}).Create(ctx, unstructuredObj, metav1.CreateOptions{})
 		} else {
-			unstructuredObj, err = k.Client.Resource(schema.GroupVersionResource{
+			unstructuredObj, err = k.client.Resource(schema.GroupVersionResource{
 				Group:    args.Group,
 				Version:  args.Version,
 				Resource: args.Resource,
@@ -208,13 +213,13 @@ func (k *K8sDynamicClient) interactWithClient(ctx context.Context, operation str
 		var err error
 
 		if args.Namespace == metav1.NamespaceNone {
-			err = k.Client.Resource(schema.GroupVersionResource{
+			err = k.client.Resource(schema.GroupVersionResource{
 				Group:    args.Group,
 				Version:  args.Version,
 				Resource: args.Resource,
 			}).Delete(ctx, args.Name, metav1.DeleteOptions{})
 		} else {
-			err = k.Client.Resource(schema.GroupVersionResource{
+			err = k.client.Resource(schema.GroupVersionResource{
 				Group:    args.Group,
 				Version:  args.Version,
 				Resource: args.Resource,

@@ -1,4 +1,4 @@
-package flows
+package tools
 
 import (
 	"context"
@@ -12,25 +12,33 @@ import (
 
 	corev1alpha1 "github.com/kube-agent/kuery/api/core/v1alpha1"
 	clientset "github.com/kube-agent/kuery/pkg/generated/clientset/versioned"
-	"github.com/kube-agent/kuery/pkg/tools"
 )
 
-var _ tools.Tool = &exportKueryFlowTool{}
+var _ Tool = &ExportKueryFlowTool{}
 
-// exportKueryFlowTool is a tool that can can export a KueryFlow from a
+// ExportKueryFlowTool is a tool that can can export a KueryFlow from a
 // conversation.
 // TODO: make flow extraction more deterministic by having the model choose steps from history instead of building KF object.
-type exportKueryFlowTool struct {
+type ExportKueryFlowTool struct {
 	client clientset.Interface
 	// toolCallGetter is a function that can get a tool-call by ID.
 	toolCallGetter func(string) (*llms.ToolCall, bool)
 }
 
-func (t *exportKueryFlowTool) Name() string {
+// NewExportKueryFlowTool creates a new ExportKueryFlowTool.
+func NewExportKueryFlowTool(client clientset.Interface,
+	toolCallGetter func(string) (*llms.ToolCall, bool)) *ExportKueryFlowTool {
+	return &ExportKueryFlowTool{
+		client:         client,
+		toolCallGetter: toolCallGetter,
+	}
+}
+
+func (t *ExportKueryFlowTool) Name() string {
 	return "exportKueryFlow"
 }
 
-func (t *exportKueryFlowTool) LLMTool() *llms.Tool {
+func (t *ExportKueryFlowTool) LLMTool() *llms.Tool {
 	return &llms.Tool{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
@@ -98,7 +106,7 @@ type exportCallArgs struct {
 	Steps     []toolCallRef `json:"steps"`
 }
 
-func (t *exportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
+func (t *ExportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
 	var args exportCallArgs
 
 	if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
@@ -126,11 +134,11 @@ func (t *exportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 
 // RequiresExplaining returns whether the tool requires explaining after
 // execution.
-func (t *exportKueryFlowTool) RequiresExplaining() bool {
+func (t *ExportKueryFlowTool) RequiresExplaining() bool {
 	return true
 }
 
-func (t *exportKueryFlowTool) createOrUpdateKueryFlow(ctx context.Context, args *exportCallArgs) error {
+func (t *ExportKueryFlowTool) createOrUpdateKueryFlow(ctx context.Context, args *exportCallArgs) error {
 	var kfSteps []corev1alpha1.Step
 
 	for _, step := range args.Steps {

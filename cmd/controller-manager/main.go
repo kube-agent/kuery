@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/kube-agent/kuery/pkg/controller"
 	"log"
 	"os"
 
@@ -16,11 +17,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	crd_discovery "github.com/kube-agent/kuery/pkg/crd-discovery"
-	"github.com/kube-agent/kuery/pkg/flows"
 	"github.com/kube-agent/kuery/pkg/flows/steps"
 	operators_db "github.com/kube-agent/kuery/pkg/operators-db"
 	"github.com/kube-agent/kuery/pkg/tools"
-	"github.com/kube-agent/kuery/pkg/tools/imp"
 )
 
 const (
@@ -65,7 +64,7 @@ func main() {
 	toolsMgr := setupToolsMgr(ctx, cfg)
 	logger.Info("Tools manager initialized")
 
-	flow := flows.NewConversationalFlow(systemPrompt, llm, toolsMgr, cfg)
+	flow := controller.NewConversationalFlow(systemPrompt, llm, toolsMgr, cfg)
 	logger.Info("Conversational flow initialized", "tools", toolsMgr.GetToolNames())
 	// Sample human step of a user that has a cluster with several services and the need for a high performance message
 	// bus operator:
@@ -89,7 +88,7 @@ func setupToolsMgr(ctx context.Context, cfg *rest.Config) *tools.Manager {
 		logger.Error(err, "Failed to create operators retriever, tool won't be enabled")
 	} else {
 		logger.Info("Operators retriever initialized")
-		callables = append(callables, &imp.OperatorsRAGTool{operatorsRetriever})
+		callables = append(callables, tools.NewOperatorsRAGTool(operatorsRetriever))
 	}
 
 	if cfg != nil {
@@ -98,7 +97,7 @@ func setupToolsMgr(ctx context.Context, cfg *rest.Config) *tools.Manager {
 			logger.Error(err, "Failed to create dynamic K8s client, K8s tools won't be enabled")
 		} else {
 			logger.Info("Dynamic K8s client initialized")
-			callables = append(callables, &imp.K8sDynamicClient{dynamicKubeClient})
+			callables = append(callables, tools.NewK8sDynamicClient(dynamicKubeClient))
 		}
 	}
 
@@ -107,7 +106,7 @@ func setupToolsMgr(ctx context.Context, cfg *rest.Config) *tools.Manager {
 		logger.Error(err, "Failed to create API discovery, tool won't be enabled")
 	} else {
 		logger.Info("API discovery initialized")
-		callables = append(callables, &imp.K8sAPIDiscoveryTool{apiDiscovery})
+		callables = append(callables, tools.NewK8sAPIDiscoveryTool(apiDiscovery))
 	}
 
 	return tools.NewManager().WithTools(callables)

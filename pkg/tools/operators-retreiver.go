@@ -1,4 +1,4 @@
-package imp
+package tools
 
 import (
 	"context"
@@ -8,16 +8,22 @@ import (
 	"github.com/tmc/langchaingo/llms"
 
 	operators_db "github.com/kube-agent/kuery/pkg/operators-db"
-	"github.com/kube-agent/kuery/pkg/tools"
 )
 
 const functionToolType = "function"
 
-var _ tools.Tool = &OperatorsRAGTool{}
+var _ Tool = &OperatorsRAGTool{}
 
 // OperatorsRAGTool is a tool that retrieves the operator schema that is most relevant to the prompt.
 type OperatorsRAGTool struct {
-	operators_db.OperatorsRetriever
+	retriever operators_db.OperatorsRetriever
+}
+
+// NewOperatorsRAGTool creates a new OperatorsRAGTool.
+func NewOperatorsRAGTool(retriever operators_db.OperatorsRetriever) *OperatorsRAGTool {
+	return &OperatorsRAGTool{
+		retriever: retriever,
+	}
 }
 
 func (ort *OperatorsRAGTool) Name() string {
@@ -63,7 +69,7 @@ func (ort *OperatorsRAGTool) Call(ctx context.Context, toolCall *llms.ToolCall) 
 		}
 	}
 
-	schemas, err := ort.RetrieveOperators(ctx, args.Prompt)
+	schemas, err := ort.retriever.RetrieveOperators(ctx, args.Prompt)
 	if err != nil {
 		return llms.ToolCallResponse{
 			ToolCallID: toolCall.ID,

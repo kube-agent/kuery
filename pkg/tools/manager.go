@@ -12,10 +12,10 @@ import (
 // Manager is a tool manager that holds all available tools, and provides methods
 // to work with them.
 type Manager struct {
-	tools         map[string]Tool
-	toolCallCache map[string]llms.ToolCall
+	tools map[string]Tool
 
-	nextCallID int
+	toolCallCache map[string]llms.ToolCall
+	nextCallID    int
 }
 
 // NewManager creates a new tool manager.
