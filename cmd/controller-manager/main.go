@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/kube-agent/kuery/pkg/controller"
+	"github.com/kube-agent/kuery/pkg/kuery"
 	"log"
 	"os"
 
@@ -64,7 +64,7 @@ func main() {
 	toolsMgr := setupToolsMgr(ctx, cfg)
 	logger.Info("Tools manager initialized")
 
-	flow := controller.NewConversationalFlow(systemPrompt, llm, toolsMgr, cfg)
+	flow := kuery.NewConversationalFlow(systemPrompt, llm, toolsMgr, cfg)
 	logger.Info("Conversational flow initialized", "tools", toolsMgr.GetToolNames())
 	// Sample human step of a user that has a cluster with several services and the need for a high performance message
 	// bus operator:
@@ -79,7 +79,7 @@ func main() {
 	}
 }
 
-func setupToolsMgr(ctx context.Context, cfg *rest.Config) *tools.Manager {
+func setupToolsMgr(ctx context.Context, cfg *rest.Config) *kuery.ToolManager {
 	logger := klog.FromContext(ctx)
 	var callables []tools.Tool
 
@@ -109,5 +109,5 @@ func setupToolsMgr(ctx context.Context, cfg *rest.Config) *tools.Manager {
 		callables = append(callables, tools.NewK8sAPIDiscoveryTool(apiDiscovery))
 	}
 
-	return tools.NewManager().WithTools(callables)
+	return kuery.NewToolManager().WithTools(callables)
 }

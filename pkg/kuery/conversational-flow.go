@@ -1,4 +1,4 @@
-package controller
+package kuery
 
 import (
 	"context"
@@ -20,13 +20,13 @@ import (
 type ConversationalFlow struct {
 	llm     llms.Model
 	chain   flows.Chain
-	toolMgr *tools.Manager
+	toolMgr *ToolManager
 
 	systemPrompt string
 }
 
 // NewConversationalFlow creates a new conversational flow.
-func NewConversationalFlow(systemPrompt string, llm llms.Model, toolMgr *tools.Manager,
+func NewConversationalFlow(systemPrompt string, llm llms.Model, toolMgr *ToolManager,
 	cfg *rest.Config) *ConversationalFlow {
 	chain := flows.NewChain(nil)
 

@@ -1,40 +1,40 @@
-package tools
+package kuery
 
 import (
 	"context"
 	"fmt"
+	"github.com/kube-agent/kuery/pkg/tools"
 
 	"github.com/tmc/langchaingo/llms"
 
 	"k8s.io/klog/v2"
 )
 
-// Manager is a tool manager that holds all available tools, and provides methods
-// to work with them.
-type Manager struct {
-	tools map[string]Tool
+// ToolManager holds all available tools and streamlines operating them.
+type ToolManager struct {
+	tools map[string]tools.Tool
 
 	toolCallCache map[string]llms.ToolCall
 	nextCallID    int
 }
 
-// NewManager creates a new tool manager.
-func NewManager() *Manager {
-	return &Manager{
-		tools:         make(map[string]Tool),
+// NewToolManager creates a new ToolManager.
+func NewToolManager() *ToolManager {
+	return &ToolManager{
+		tools:         make(map[string]tools.Tool),
 		toolCallCache: make(map[string]llms.ToolCall),
 		nextCallID:    1,
 	}
 }
 
 // WithTool adds a tool to the manager.
-func (m *Manager) WithTool(tool Tool) *Manager {
+func (m *ToolManager) WithTool(tool tools.Tool) *ToolManager {
 	m.tools[tool.Name()] = tool
 	return m
 }
 
 // WithTools adds multiple tools to the manager.
-func (m *Manager) WithTools(tools []Tool) *Manager {
+func (m *ToolManager) WithTools(tools []tools.Tool) *ToolManager {
 	for _, tool := range tools {
 		m.tools[tool.Name()] = tool
 	}
@@ -42,18 +42,18 @@ func (m *Manager) WithTools(tools []Tool) *Manager {
 }
 
 // GetToolCall returns the tool call with the given ID.
-func (m *Manager) GetToolCall(id string) (*llms.ToolCall, bool) {
+func (m *ToolManager) GetToolCall(id string) (*llms.ToolCall, bool) {
 	toolCall, ok := m.toolCallCache[id]
 	return &toolCall, ok
 }
 
 // GetTool returns the tool with the given name.
-func (m *Manager) GetTool(name string) Tool {
+func (m *ToolManager) GetTool(name string) tools.Tool {
 	return m.tools[name]
 }
 
 // GetLLMTools returns all tools as LLM tools.
-func (m *Manager) GetLLMTools() []llms.Tool {
+func (m *ToolManager) GetLLMTools() []llms.Tool {
 	llmTools := make([]llms.Tool, 0, len(m.tools))
 	for _, tool := range m.tools {
 		llmTools = append(llmTools, *tool.LLMTool())
@@ -63,7 +63,7 @@ func (m *Manager) GetLLMTools() []llms.Tool {
 }
 
 // GetToolNames returns the names of all tools.
-func (m *Manager) GetToolNames() []string {
+func (m *ToolManager) GetToolNames() []string {
 	names := make([]string, 0, len(m.tools))
 	for name := range m.tools {
 		names = append(names, name)
@@ -77,7 +77,7 @@ func (m *Manager) GetToolNames() []string {
 // - A boolean indicating whether the response requires further processing (LLMStep).
 //
 // If the response does not contain any tool calls, it returns an empty slice with false.
-func (m *Manager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentResponse) ([]llms.MessageContent, bool) {
+func (m *ToolManager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentResponse) ([]llms.MessageContent, bool) {
 	newMessages := make([]llms.MessageContent, 0)
 	logger := klog.FromContext(ctx)
 	requireFurtherProcessing := false
