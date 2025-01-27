@@ -19,6 +19,11 @@ func NewLLMStep(model llms.Model) *LLMStep {
 	return &LLMStep{model: model}
 }
 
+// Type returns the type of the step.
+func (s *LLMStep) Type() StepType {
+	return StepTypeLLM
+}
+
 // Execute runs the step with the given llm and returns the response.
 func (s *LLMStep) Execute(ctx context.Context) (*llms.ContentResponse, error) {
 	return s.model.GenerateContent(ctx, s.history, s.callOptions...)

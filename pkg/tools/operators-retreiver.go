@@ -56,7 +56,7 @@ func (ort *OperatorsRAGTool) LLMTool() *llms.Tool {
 	}
 }
 
-func (ort *OperatorsRAGTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
+func (ort *OperatorsRAGTool) Call(ctx context.Context, toolCall *llms.ToolCall) (llms.ToolCallResponse, bool) {
 	var args struct {
 		Prompt string `json:"prompt"`
 	}
@@ -66,7 +66,7 @@ func (ort *OperatorsRAGTool) Call(ctx context.Context, toolCall *llms.ToolCall) 
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("failed to unmarshal arguments: %v", err),
-		}
+		}, false
 	}
 
 	schemas, err := ort.retriever.RetrieveOperators(ctx, args.Prompt)
@@ -75,14 +75,14 @@ func (ort *OperatorsRAGTool) Call(ctx context.Context, toolCall *llms.ToolCall) 
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("failed to get relevant operators: %v", err),
-		}
+		}, false
 	}
 
 	return llms.ToolCallResponse{
 		ToolCallID: toolCall.ID,
 		Name:       toolCall.FunctionCall.Name,
 		Content:    operators_db.OperatorSchemasToString(schemas),
-	}
+	}, true
 }
 
 // RequiresExplaining returns whether the tool requires explaining after
@@ -90,3 +90,7 @@ func (ort *OperatorsRAGTool) Call(ctx context.Context, toolCall *llms.ToolCall) 
 func (ort *OperatorsRAGTool) RequiresExplaining() bool {
 	return true
 }
+
+// RequiresApproval returns whether the tool requires approval before
+// execution.
+func (ort *OperatorsRAGTool) RequiresApproval() bool { return false }

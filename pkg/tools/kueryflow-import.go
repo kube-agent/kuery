@@ -75,7 +75,7 @@ type importCallArgs struct {
 	Namespace string `json:"namespace"`
 }
 
-func (t *ImportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
+func (t *ImportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall) (llms.ToolCallResponse, bool) {
 	var args importCallArgs
 
 	if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
@@ -83,7 +83,7 @@ func (t *ImportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("failed to unmarshal arguments: %v", err),
-		}
+		}, false
 	}
 
 	switch args.Operation {
@@ -94,14 +94,14 @@ func (t *ImportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 				ToolCallID: toolCall.ID,
 				Name:       toolCall.FunctionCall.Name,
 				Content:    fmt.Sprintf("failed to list KueryFlows: %v", err),
-			}
+			}, false
 		}
 
 		return llms.ToolCallResponse{
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("KueryFlows in namespace %v: %v", args.Namespace, kueryFlows),
-		}
+		}, true
 	case "GET":
 		kueryFlow, err := t.getKueryFlow(ctx, args.Namespace, args.Name)
 		if err != nil {
@@ -109,21 +109,21 @@ func (t *ImportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 				ToolCallID: toolCall.ID,
 				Name:       toolCall.FunctionCall.Name,
 				Content:    fmt.Sprintf("failed to get KueryFlow: %v", err),
-			}
+			}, false
 		}
 
 		return llms.ToolCallResponse{
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("KueryFlow: %v", kueryFlow),
-		}
+		}, true
 	case "EXECUTE":
 		if t.chain == nil || t.llm == nil {
 			return llms.ToolCallResponse{
 				ToolCallID: toolCall.ID,
 				Name:       toolCall.FunctionCall.Name,
 				Content:    "no chain or llm set",
-			}
+			}, false
 		}
 
 		kueryFlow, err := t.getKueryFlow(ctx, args.Namespace, args.Name)
@@ -132,7 +132,7 @@ func (t *ImportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 				ToolCallID: toolCall.ID,
 				Name:       toolCall.FunctionCall.Name,
 				Content:    fmt.Sprintf("failed to get KueryFlow: %v", err),
-			}
+			}, false
 		}
 
 		t.appendKueryFlowToChain(kueryFlow)
@@ -140,14 +140,14 @@ func (t *ImportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("loaded KueryFlow steps: %v", kueryFlow.Name),
-		}
+		}, true
 
 	default:
 		return llms.ToolCallResponse{
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("unknown operation: %v", args.Operation),
-		}
+		}, false
 	}
 }
 
@@ -156,6 +156,10 @@ func (t *ImportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 func (t *ImportKueryFlowTool) RequiresExplaining() bool {
 	return false
 }
+
+// RequiresApproval returns whether the tool requires approval before
+// execution.
+func (t *ImportKueryFlowTool) RequiresApproval() bool { return false }
 
 func (t *ImportKueryFlowTool) listKueryFlows(ctx context.Context, namespace string) ([]corev1alpha1.KueryFlow, error) {
 	kueryFlows, err := t.client.CoreV1alpha1().KueryFlows(namespace).List(ctx, metav1.ListOptions{})

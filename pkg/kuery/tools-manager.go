@@ -10,40 +10,52 @@ import (
 
 // ToolManager holds all available tools and streamlines operating them.
 type ToolManager struct {
-	maxRetries int
-	tools      map[string]tools.Tool
+	tools map[string]tools.Tool
 
 	toolCallCache map[string]llms.ToolCall
 	nextCallID    int
 
-	toolApprovals map[string]bool
+	// TODO: combine maps
+	toolMaxRetries map[string]int
+	toolApprovals  map[string]bool
+	toolRetries    map[string]int // for starters, retries are global per LLM step
 }
 
 // NewToolManager creates a new ToolManager.
-func NewToolManager(maxRetries int) *ToolManager {
+func NewToolManager() *ToolManager {
 	return &ToolManager{
-		maxRetries:    maxRetries,
-		tools:         make(map[string]tools.Tool),
-		toolCallCache: make(map[string]llms.ToolCall),
-		nextCallID:    1,
-		toolApprovals: make(map[string]bool),
+		tools:          make(map[string]tools.Tool),
+		toolCallCache:  make(map[string]llms.ToolCall),
+		nextCallID:     1,
+		toolMaxRetries: make(map[string]int),
+		toolApprovals:  make(map[string]bool),
+		toolRetries:    make(map[string]int),
 	}
 }
 
 // WithTool adds a tool to the manager.
-func (m *ToolManager) WithTool(tool tools.Tool) *ToolManager {
+// The maxRetries parameter specifies the maximum number of consecutive runs a tool can have.
+func (m *ToolManager) WithTool(tool tools.Tool, maxRetries int) *ToolManager {
 	m.tools[tool.Name()] = tool
 	if tool.RequiresApproval() {
 		m.toolApprovals[tool.Name()] = false
+		m.toolRetries[tool.Name()] = 0
+		m.toolMaxRetries[tool.Name()] = maxRetries
 	}
 
 	return m
 }
 
 // WithTools adds multiple tools to the manager.
-func (m *ToolManager) WithTools(tools []tools.Tool) *ToolManager {
-	for _, tool := range tools {
-		m.WithTool(tool)
+// The maxRetries parameter specifies the maximum number of consecutive runs a tool can have.
+// The tools and maxRetries slices must have the same length.
+func (m *ToolManager) WithTools(tools []tools.Tool, maxRetries []int) *ToolManager {
+	if len(tools) != len(maxRetries) {
+		return m
+	}
+
+	for idx, tool := range tools {
+		m.WithTool(tool, maxRetries[idx])
 	}
 	return m
 }
@@ -105,6 +117,8 @@ func (m *ToolManager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentRe
 						llms.TextPart(fmt.Sprintf("Tool-Call %s blocked: %s\n", toolCall.FunctionCall.Name,
 							toolCallResponse.Content)),
 					}})
+
+				m.toolRetries[toolCall.FunctionCall.Name]++
 				continue
 			}
 
@@ -120,6 +134,7 @@ func (m *ToolManager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentRe
 
 			// save tool use
 			m.toolCallCache[fmt.Sprintf("%d", m.nextCallID)] = toolCall // safe since execution blocks Kuery
+			m.toolRetries[toolCall.FunctionCall.Name] = 0
 			m.nextCallID++
 		}
 	}
@@ -149,7 +164,7 @@ func (m *ToolManager) callTool(ctx context.Context, toolCall *llms.ToolCall) (ll
 		}, false, false
 	}
 
-	if tool.GetFailedCallCount(toolCall) >= m.maxRetries {
+	if m.toolRetries[tool.Name()] > m.toolMaxRetries[tool.Name()] {
 		return llms.ToolCallResponse{
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
@@ -167,4 +182,10 @@ func (m *ToolManager) callTool(ctx context.Context, toolCall *llms.ToolCall) (ll
 
 	response, ok := tool.Call(ctx, toolCall)
 	return response, ok, tool.RequiresExplaining()
+}
+
+func (m *ToolManager) ResetToolRetries() {
+	for tool := range m.toolRetries {
+		m.toolRetries[tool] = 0
+	}
 }

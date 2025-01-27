@@ -39,10 +39,7 @@ func NewConversationalFlow(systemPrompt string, llm llms.Model, toolMgr *ToolMan
 
 			exportKueryFlowTool := tools.NewExportKueryFlowTool(coreClient, toolMgr.GetToolCall)
 
-			toolMgr = toolMgr.WithTools([]tools.Tool{
-				importKueryFlowTool,
-				exportKueryFlowTool,
-			})
+			toolMgr = toolMgr.WithTool(importKueryFlowTool, 3).WithTool(exportKueryFlowTool, 3)
 		} else {
 			klog.Error("failed to create core client", "error", err)
 		}
@@ -51,7 +48,7 @@ func NewConversationalFlow(systemPrompt string, llm llms.Model, toolMgr *ToolMan
 	return &ConversationalFlow{
 		llm:          llm,
 		chain:        chain,
-		toolMgr:      toolMgr.WithTool(planner),
+		toolMgr:      toolMgr.WithTool(planner, 1),
 		systemPrompt: systemPrompt,
 	}
 }
@@ -102,6 +99,10 @@ func (f *ConversationalFlow) execute(ctx context.Context,
 		step := f.chain.Next()
 		if step == nil {
 			break
+		}
+
+		if step.Type() == steps.StepTypeHuman {
+			f.toolMgr.ResetToolRetries() // done here to avoid the LLM rampage with tool calls in consecutive turns
 		}
 
 		response, err := step.

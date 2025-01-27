@@ -106,7 +106,7 @@ type exportCallArgs struct {
 	Steps     []toolCallRef `json:"steps"`
 }
 
-func (t *ExportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
+func (t *ExportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall) (llms.ToolCallResponse, bool) {
 	var args exportCallArgs
 
 	if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
@@ -114,7 +114,7 @@ func (t *ExportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("failed to unmarshal arguments: %v", err),
-		}
+		}, false
 	}
 
 	if err := t.createOrUpdateKueryFlow(ctx, &args); err != nil {
@@ -122,14 +122,14 @@ func (t *ExportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("failed to export KueryFlow: %v", err),
-		}
+		}, false
 	}
 
 	return llms.ToolCallResponse{
 		ToolCallID: toolCall.ID,
 		Name:       toolCall.FunctionCall.Name,
 		Content:    "Exported KueryFlow: " + args.Name,
-	}
+	}, true
 }
 
 // RequiresExplaining returns whether the tool requires explaining after
@@ -138,6 +138,9 @@ func (t *ExportKueryFlowTool) RequiresExplaining() bool {
 	return true
 }
 
+// RequiresApproval returns whether the tool requires approval before
+// execution.
+func (t *ExportKueryFlowTool) RequiresApproval() bool { return true }
 func (t *ExportKueryFlowTool) createOrUpdateKueryFlow(ctx context.Context, args *exportCallArgs) error {
 	var kfSteps []corev1alpha1.Step
 

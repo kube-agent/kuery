@@ -55,7 +55,7 @@ func (t *AddStepTool) LLMTool() *llms.Tool {
 	}
 }
 
-func (t *AddStepTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
+func (t *AddStepTool) Call(ctx context.Context, toolCall *llms.ToolCall) (llms.ToolCallResponse, bool) {
 	var args struct {
 		Prompt string `json:"prompt"`
 	}
@@ -64,7 +64,7 @@ func (t *AddStepTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.To
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("failed to unmarshal arguments: %v", err),
-		}
+		}, false
 	}
 
 	if t.chain == nil || t.llm == nil {
@@ -72,7 +72,7 @@ func (t *AddStepTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.To
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    "no chain or llm set",
-		}
+		}, false
 	}
 
 	step := steps.NewLLMStep(t.llm).WithHistory([]llms.MessageContent{
@@ -84,7 +84,7 @@ func (t *AddStepTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.To
 		ToolCallID: toolCall.ID,
 		Name:       toolCall.FunctionCall.Name,
 		Content:    "Added AI step with prompt: " + args.Prompt,
-	}
+	}, true
 }
 
 // RequiresExplaining returns whether the tool requires explaining after
@@ -92,3 +92,7 @@ func (t *AddStepTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.To
 func (t *AddStepTool) RequiresExplaining() bool {
 	return false // adds a step to the chain, no need to explain
 }
+
+// RequiresApproval returns whether the tool requires approval before
+// execution.
+func (t *AddStepTool) RequiresApproval() bool { return false }

@@ -33,12 +33,8 @@ func (t *K8sAPIDiscoveryTool) LLMTool() *llms.Tool {
 		Type: functionToolType,
 		Function: &llms.FunctionDefinition{
 			Name: t.Name(),
-			Description: `This tool is backed by a K8s API Discovery database that automatically learns the user's custom resources.
-
-							You must call this tool to discover NON-CORE K8s API EXAMPLES (CRs) before using them in the dynamic client.
-							Note that this does not install new ones, it only retrieves existing ones. As in, not for installing new operators.
-
-							You should not use this tool for builtin kubernetes resources.`,
+			Description: `This tool is used to learn about custom-resources (non-builtin resources!) before interacting with them within the dynamic client.
+							You MUST NOT use this tool for builtin kubernetes resources such as deployments, pods...`,
 
 			Parameters: map[string]interface{}{
 				"type": "object",
@@ -55,7 +51,7 @@ func (t *K8sAPIDiscoveryTool) LLMTool() *llms.Tool {
 	}
 }
 
-func (t *K8sAPIDiscoveryTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
+func (t *K8sAPIDiscoveryTool) Call(ctx context.Context, toolCall *llms.ToolCall) (llms.ToolCallResponse, bool) {
 	var args struct {
 		Prompt string `json:"prompt"`
 	}
@@ -65,7 +61,7 @@ func (t *K8sAPIDiscoveryTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("failed to unmarshal arguments: %v", err),
-		}
+		}, false
 	}
 
 	crds, err := t.retriever.RetrieveCRDs(ctx, args.Prompt)
@@ -74,7 +70,7 @@ func (t *K8sAPIDiscoveryTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("failed to get relevant CRD: %v", err),
-		}
+		}, false
 	}
 
 	crd := ""
@@ -87,7 +83,7 @@ func (t *K8sAPIDiscoveryTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 		ToolCallID: toolCall.ID,
 		Name:       toolCall.FunctionCall.Name,
 		Content:    crd,
-	}
+	}, true
 }
 
 // RequiresExplaining returns whether the tool requires explaining after
@@ -95,3 +91,7 @@ func (t *K8sAPIDiscoveryTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 func (t *K8sAPIDiscoveryTool) RequiresExplaining() bool {
 	return true
 }
+
+// RequiresApproval returns whether the tool requires approval before
+// execution.
+func (t *K8sAPIDiscoveryTool) RequiresApproval() bool { return false }

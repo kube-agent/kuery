@@ -19,6 +19,11 @@ func NewHumanStep(getter func(ctx context.Context) string) *HumanStep {
 	return &HumanStep{getter: getter}
 }
 
+// Type returns the type of the step.
+func (s *HumanStep) Type() StepType {
+	return StepTypeHuman
+}
+
 // Execute runs a human step with the given llm and returns the response.
 func (s *HumanStep) Execute(ctx context.Context) (*llms.ContentResponse, error) {
 	return &llms.ContentResponse{

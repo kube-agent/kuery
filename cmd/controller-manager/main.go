@@ -82,6 +82,7 @@ func main() {
 func setupToolsMgr(ctx context.Context, cfg *rest.Config) *kuery.ToolManager {
 	logger := klog.FromContext(ctx)
 	var callables []tools.Tool
+	var maxRetries []int
 
 	operatorsRetriever, err := operators_db.NewMilvusStore(ctx)
 	if err != nil {
@@ -89,6 +90,7 @@ func setupToolsMgr(ctx context.Context, cfg *rest.Config) *kuery.ToolManager {
 	} else {
 		logger.Info("Operators retriever initialized")
 		callables = append(callables, tools.NewOperatorsRAGTool(operatorsRetriever))
+		maxRetries = append(maxRetries, 1)
 	}
 
 	if cfg != nil {
@@ -98,6 +100,7 @@ func setupToolsMgr(ctx context.Context, cfg *rest.Config) *kuery.ToolManager {
 		} else {
 			logger.Info("Dynamic K8s client initialized")
 			callables = append(callables, tools.NewK8sDynamicClient(dynamicKubeClient))
+			maxRetries = append(maxRetries, 3)
 		}
 	}
 
@@ -107,7 +110,8 @@ func setupToolsMgr(ctx context.Context, cfg *rest.Config) *kuery.ToolManager {
 	} else {
 		logger.Info("API discovery initialized")
 		callables = append(callables, tools.NewK8sAPIDiscoveryTool(apiDiscovery))
+		maxRetries = append(maxRetries, 1)
 	}
 
-	return kuery.NewToolManager().WithTools(callables)
+	return kuery.NewToolManager().WithTools(callables, maxRetries)
 }

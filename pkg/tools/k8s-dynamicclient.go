@@ -99,7 +99,7 @@ type dynamicCallArgs struct {
 }
 
 // Call executes the tool call and returns the response.
-func (k *K8sDynamicClient) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
+func (k *K8sDynamicClient) Call(ctx context.Context, toolCall *llms.ToolCall) (llms.ToolCallResponse, bool) {
 	var args dynamicCallArgs
 
 	if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
@@ -107,7 +107,7 @@ func (k *K8sDynamicClient) Call(ctx context.Context, toolCall *llms.ToolCall) ll
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("failed to unmarshal arguments: %v", err),
-		}
+		}, false
 	}
 
 	response, err := k.interactWithClient(ctx, args.Operation, args)
@@ -116,14 +116,14 @@ func (k *K8sDynamicClient) Call(ctx context.Context, toolCall *llms.ToolCall) ll
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("failed to interact with Kubernetes API: %v", err),
-		}
+		}, false
 	}
 
 	return llms.ToolCallResponse{
 		ToolCallID: toolCall.ID,
 		Name:       toolCall.FunctionCall.Name,
 		Content:    response,
-	}
+	}, true
 }
 
 // interactWithClient interacts with the Kubernetes API using the go client.
@@ -239,3 +239,7 @@ func (k *K8sDynamicClient) interactWithClient(ctx context.Context, operation str
 func (k *K8sDynamicClient) RequiresExplaining() bool {
 	return true
 }
+
+// RequiresApproval returns whether the tool requires approval before
+// execution.
+func (k *K8sDynamicClient) RequiresApproval() bool { return true }
