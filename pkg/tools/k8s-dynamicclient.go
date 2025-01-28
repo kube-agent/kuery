@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/kube-agent/kuery/pkg/tools/api"
 
 	"github.com/tmc/langchaingo/llms"
 
@@ -13,7 +14,7 @@ import (
 	"k8s.io/client-go/dynamic"
 )
 
-var _ Tool = &K8sDynamicClient{}
+var _ api.Tool = &K8sDynamicClient{}
 
 // K8sDynamicClient implements the Tool interface for the K8s dynamic client.
 type K8sDynamicClient struct {
@@ -34,13 +35,14 @@ func (k *K8sDynamicClient) Name() string {
 
 // LLMTool returns the tool as an LLM tool.
 func (k *K8sDynamicClient) LLMTool() *llms.Tool {
+	desc := `Interact with Kubernetes Cluster.
+			This tool should be used when the user wants to interact with the Kubernetes cluster.`
+
 	return &llms.Tool{
 		Type: functionToolType,
 		Function: &llms.FunctionDefinition{
-			Name: k.Name(),
-			Description: `Interact with Kubernetes Cluster.
-						  This tool should be used when the user wants to interact with the Kubernetes cluster.
-							MAKE SURE YOU ASK THE USER FOR PERMISSION.`,
+			Name:        k.Name(),
+			Description: api.AddApprovalRequirementToDescription(k, desc),
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -99,7 +101,7 @@ type dynamicCallArgs struct {
 }
 
 // Call executes the tool call and returns the response.
-func (k *K8sDynamicClient) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
+func (k *K8sDynamicClient) Call(ctx context.Context, toolCall *llms.ToolCall) (llms.ToolCallResponse, bool) {
 	var args dynamicCallArgs
 
 	if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
@@ -107,7 +109,7 @@ func (k *K8sDynamicClient) Call(ctx context.Context, toolCall *llms.ToolCall) ll
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("failed to unmarshal arguments: %v", err),
-		}
+		}, false
 	}
 
 	response, err := k.interactWithClient(ctx, args.Operation, args)
@@ -116,14 +118,14 @@ func (k *K8sDynamicClient) Call(ctx context.Context, toolCall *llms.ToolCall) ll
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("failed to interact with Kubernetes API: %v", err),
-		}
+		}, false
 	}
 
 	return llms.ToolCallResponse{
 		ToolCallID: toolCall.ID,
 		Name:       toolCall.FunctionCall.Name,
 		Content:    response,
-	}
+	}, true
 }
 
 // interactWithClient interacts with the Kubernetes API using the go client.
@@ -239,3 +241,7 @@ func (k *K8sDynamicClient) interactWithClient(ctx context.Context, operation str
 func (k *K8sDynamicClient) RequiresExplaining() bool {
 	return true
 }
+
+// RequiresApproval returns whether the tool requires approval before
+// execution.
+func (k *K8sDynamicClient) RequiresApproval() bool { return true }

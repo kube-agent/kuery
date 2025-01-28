@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/kube-agent/kuery/pkg/flows"
+	"github.com/kube-agent/kuery/pkg/tools/api"
 
 	"github.com/tmc/langchaingo/llms"
 
@@ -16,19 +17,23 @@ import (
 )
 
 // ImportKueryFlowTool is a tool that can get or execute a KueryFlow object.
-// TODO: think of execution modes, add side-quests for recalcing missing step args.
+// TODO: Add side-quests for recalculating missing step args.
+// TODO: Right now the model gets "execute X call" for simplicity, in the future the model should not be involved
 type ImportKueryFlowTool struct {
-	client clientset.Interface
-	chain  flows.Chain
-	llm    llms.Model
+	client  clientset.Interface
+	chain   flows.Chain
+	toolMgr *api.ToolManager
+	llm     llms.Model
 }
 
 // NewImportKueryFlowTool creates a new ImportKueryFlowTool.
-func NewImportKueryFlowTool(client clientset.Interface, chain flows.Chain, llm llms.Model) *ImportKueryFlowTool {
+func NewImportKueryFlowTool(client clientset.Interface, chain flows.Chain,
+	toolMgr *api.ToolManager, llm llms.Model) *ImportKueryFlowTool {
 	return &ImportKueryFlowTool{
-		client: client,
-		chain:  chain,
-		llm:    llm,
+		client:  client,
+		chain:   chain,
+		toolMgr: toolMgr,
+		llm:     llm,
 	}
 }
 
@@ -37,13 +42,14 @@ func (t *ImportKueryFlowTool) Name() string {
 }
 
 func (t *ImportKueryFlowTool) LLMTool() *llms.Tool {
+	desc := `ImportKueryFlow is a tool that is used for getting or executing KueryFlows. These functionalities
+			are split because in general you should not execute a KueryFlow without the user's consent.`
+
 	return &llms.Tool{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
-			Name: t.Name(),
-			Description: `ImportKueryFlow is a tool that is used for getting or executing KueryFlows. These functionalities
-							are split because in general you should not execute a KueryFlow without the user's consent.`,
-
+			Name:        t.Name(),
+			Description: api.AddApprovalRequirementToDescription(t, desc),
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -75,7 +81,7 @@ type importCallArgs struct {
 	Namespace string `json:"namespace"`
 }
 
-func (t *ImportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall) llms.ToolCallResponse {
+func (t *ImportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall) (llms.ToolCallResponse, bool) {
 	var args importCallArgs
 
 	if err := json.Unmarshal([]byte(toolCall.FunctionCall.Arguments), &args); err != nil {
@@ -83,7 +89,7 @@ func (t *ImportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("failed to unmarshal arguments: %v", err),
-		}
+		}, false
 	}
 
 	switch args.Operation {
@@ -94,14 +100,14 @@ func (t *ImportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 				ToolCallID: toolCall.ID,
 				Name:       toolCall.FunctionCall.Name,
 				Content:    fmt.Sprintf("failed to list KueryFlows: %v", err),
-			}
+			}, false
 		}
 
 		return llms.ToolCallResponse{
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("KueryFlows in namespace %v: %v", args.Namespace, kueryFlows),
-		}
+		}, true
 	case "GET":
 		kueryFlow, err := t.getKueryFlow(ctx, args.Namespace, args.Name)
 		if err != nil {
@@ -109,21 +115,21 @@ func (t *ImportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 				ToolCallID: toolCall.ID,
 				Name:       toolCall.FunctionCall.Name,
 				Content:    fmt.Sprintf("failed to get KueryFlow: %v", err),
-			}
+			}, false
 		}
 
 		return llms.ToolCallResponse{
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("KueryFlow: %v", kueryFlow),
-		}
+		}, true
 	case "EXECUTE":
 		if t.chain == nil || t.llm == nil {
 			return llms.ToolCallResponse{
 				ToolCallID: toolCall.ID,
 				Name:       toolCall.FunctionCall.Name,
 				Content:    "no chain or llm set",
-			}
+			}, false
 		}
 
 		kueryFlow, err := t.getKueryFlow(ctx, args.Namespace, args.Name)
@@ -132,7 +138,7 @@ func (t *ImportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 				ToolCallID: toolCall.ID,
 				Name:       toolCall.FunctionCall.Name,
 				Content:    fmt.Sprintf("failed to get KueryFlow: %v", err),
-			}
+			}, false
 		}
 
 		t.appendKueryFlowToChain(kueryFlow)
@@ -140,14 +146,14 @@ func (t *ImportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("loaded KueryFlow steps: %v", kueryFlow.Name),
-		}
+		}, true
 
 	default:
 		return llms.ToolCallResponse{
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("unknown operation: %v", args.Operation),
-		}
+		}, false
 	}
 }
 
@@ -156,6 +162,10 @@ func (t *ImportKueryFlowTool) Call(ctx context.Context, toolCall *llms.ToolCall)
 func (t *ImportKueryFlowTool) RequiresExplaining() bool {
 	return false
 }
+
+// RequiresApproval returns whether the tool requires approval before
+// execution.
+func (t *ImportKueryFlowTool) RequiresApproval() bool { return true }
 
 func (t *ImportKueryFlowTool) listKueryFlows(ctx context.Context, namespace string) ([]corev1alpha1.KueryFlow, error) {
 	kueryFlows, err := t.client.CoreV1alpha1().KueryFlows(namespace).List(ctx, metav1.ListOptions{})
@@ -198,6 +208,7 @@ func (t *ImportKueryFlowTool) createToolStep(step corev1alpha1.Step) steps.Step 
 		})
 	}
 
+	t.toolMgr.ApproveTools([]string{step.FunctionCall.Name}) // approve the tool to be executed
 	// in this case we can simply create a tool step
 	return steps.NewHumanStep(func(_ context.Context) string {
 		return fmt.Sprintf("Execute the following tool-call:\n%v", *step.FunctionCall)

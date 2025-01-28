@@ -6,8 +6,8 @@ import (
 	"github.com/fatih/color"
 	"github.com/kr/pretty"
 	"github.com/kube-agent/kuery/pkg/flows"
+	"github.com/kube-agent/kuery/pkg/tools/api"
 	"github.com/tmc/langchaingo/llms"
-
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
@@ -20,38 +20,39 @@ import (
 type ConversationalFlow struct {
 	llm     llms.Model
 	chain   flows.Chain
-	toolMgr *ToolManager
+	toolMgr *api.ToolManager
 
 	systemPrompt string
 }
 
 // NewConversationalFlow creates a new conversational flow.
-func NewConversationalFlow(systemPrompt string, llm llms.Model, toolMgr *ToolManager,
+func NewConversationalFlow(systemPrompt string, llm llms.Model, toolMgr *api.ToolManager,
 	cfg *rest.Config) *ConversationalFlow {
 	chain := flows.NewChain(nil)
 
 	planner := tools.NewAddStepTool(chain, llm)
+	toolMgr = toolMgr.WithTool(planner, 1)
 
 	if cfg != nil {
 		coreClient, err := clientset.NewForConfig(cfg)
 		if err == nil {
-			importKueryFlowTool := tools.NewImportKueryFlowTool(coreClient, chain, llm)
+			importKueryFlowTool := tools.NewImportKueryFlowTool(coreClient, chain, toolMgr, llm)
 
 			exportKueryFlowTool := tools.NewExportKueryFlowTool(coreClient, toolMgr.GetToolCall)
 
-			toolMgr = toolMgr.WithTools([]tools.Tool{
-				importKueryFlowTool,
-				exportKueryFlowTool,
-			})
+			toolMgr = toolMgr.WithTool(importKueryFlowTool, 3).WithTool(exportKueryFlowTool, 3)
 		} else {
 			klog.Error("failed to create core client", "error", err)
 		}
 	}
 
+	toolsApprovalTool := tools.NewToolApprovalTool(chain, llm, toolMgr)
+	toolMgr = toolMgr.WithTool(toolsApprovalTool, 2)
+
 	return &ConversationalFlow{
 		llm:          llm,
 		chain:        chain,
-		toolMgr:      toolMgr.WithTool(planner),
+		toolMgr:      toolMgr,
 		systemPrompt: systemPrompt,
 	}
 }
@@ -104,6 +105,10 @@ func (f *ConversationalFlow) execute(ctx context.Context,
 			break
 		}
 
+		if step.Type() == steps.StepTypeHuman {
+			f.toolMgr.ResetToolRetries() // done here to avoid the LLM rampage with tool calls in consecutive turns
+		}
+
 		response, err := step.
 			WithHistory(history, true).
 			WithCallOptions([]llms.CallOption{llms.WithTools(f.toolMgr.GetLLMTools())}).
@@ -121,7 +126,7 @@ func (f *ConversationalFlow) execute(ctx context.Context,
 		}
 
 		if requiresClarificationStep {
-			logger.V(4).Info("Added AI Step")
+			logger.V(2).Info("Added AI Step")
 			f.chain.PushNext(steps.NewLLMStep(f.llm), true)
 		}
 	}
