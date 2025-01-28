@@ -1,16 +1,14 @@
-package kuery
+package api
 
 import (
 	"context"
 	"fmt"
-	"github.com/kube-agent/kuery/pkg/tools"
-
 	"github.com/tmc/langchaingo/llms"
 )
 
 // ToolManager holds all available tools and streamlines operating them.
 type ToolManager struct {
-	tools map[string]tools.Tool
+	tools map[string]Tool
 
 	toolCallCache map[string]llms.ToolCall
 	nextCallID    int
@@ -24,7 +22,7 @@ type ToolManager struct {
 // NewToolManager creates a new ToolManager.
 func NewToolManager() *ToolManager {
 	return &ToolManager{
-		tools:          make(map[string]tools.Tool),
+		tools:          make(map[string]Tool),
 		toolCallCache:  make(map[string]llms.ToolCall),
 		nextCallID:     1,
 		toolMaxRetries: make(map[string]int),
@@ -35,7 +33,7 @@ func NewToolManager() *ToolManager {
 
 // WithTool adds a tool to the manager.
 // The maxRetries parameter specifies the maximum number of consecutive runs a tool can have.
-func (m *ToolManager) WithTool(tool tools.Tool, maxRetries int) *ToolManager {
+func (m *ToolManager) WithTool(tool Tool, maxRetries int) *ToolManager {
 	m.tools[tool.Name()] = tool
 	if tool.RequiresApproval() {
 		m.toolApprovals[tool.Name()] = false
@@ -49,7 +47,7 @@ func (m *ToolManager) WithTool(tool tools.Tool, maxRetries int) *ToolManager {
 // WithTools adds multiple tools to the manager.
 // The maxRetries parameter specifies the maximum number of consecutive runs a tool can have.
 // The tools and maxRetries slices must have the same length.
-func (m *ToolManager) WithTools(tools []tools.Tool, maxRetries []int) *ToolManager {
+func (m *ToolManager) WithTools(tools []Tool, maxRetries []int) *ToolManager {
 	if len(tools) != len(maxRetries) {
 		return m
 	}
@@ -95,11 +93,16 @@ func (m *ToolManager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentRe
 	newMessages := make([]llms.MessageContent, 0)
 	requireFurtherProcessing := false
 
+	usedTools := []string{}
+
 	for _, choice := range resp.Choices {
 		for _, toolCall := range choice.ToolCalls {
+			toolCallResponse, ok, requiresExplaining := m.callTool(ctx, &toolCall)
 			newMessages = append(newMessages, llms.MessageContent{ // tool call message is always appended
 				Role: llms.ChatMessageTypeAI,
 				Parts: []llms.ContentPart{
+					llms.TextPart(fmt.Sprintf("[ID: %d] Tool-Call %s executed\n",
+						m.nextCallID, toolCall.FunctionCall.Name)),
 					llms.ToolCall{
 						ID:   toolCall.ID,
 						Type: toolCall.Type,
@@ -109,32 +112,22 @@ func (m *ToolManager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentRe
 						},
 					}}})
 
-			toolCallResponse, blocked, requiresExplaining := m.callTool(ctx, &toolCall)
-			if blocked {
-				newMessages = append(newMessages, llms.MessageContent{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.TextPart(fmt.Sprintf("Tool-Call %s blocked: %s\n", toolCall.FunctionCall.Name,
-							toolCallResponse.Content)),
-					}})
+			requireFurtherProcessing = requireFurtherProcessing || requiresExplaining
+			newMessages = append(newMessages, llms.MessageContent{
+				Role:  llms.ChatMessageTypeTool,
+				Parts: []llms.ContentPart{toolCallResponse}})
 
+			if !ok {
 				m.toolRetries[toolCall.FunctionCall.Name]++
+				m.nextCallID++
 				continue
 			}
 
-			requireFurtherProcessing = requireFurtherProcessing || requiresExplaining
-
-			// append tool response
-			newMessages = append(newMessages, llms.MessageContent{
-				Role: llms.ChatMessageTypeTool,
-				Parts: []llms.ContentPart{
-					llms.TextPart(fmt.Sprintf("[ID: %d] Tool-Call %s executed\n",
-						m.nextCallID, toolCall.FunctionCall.Name)),
-					toolCallResponse}})
-
-			// save tool use
+			// Bookkeeping, TODO: make this more maintainable
 			m.toolCallCache[fmt.Sprintf("%d", m.nextCallID)] = toolCall // safe since execution blocks Kuery
-			m.toolRetries[toolCall.FunctionCall.Name] = 0
+			m.toolRetries[toolCall.FunctionCall.Name] = 0               // reset retries because tool was successful
+			m.toolApprovals[toolCall.FunctionCall.Name] = false         // reset approval because tool was successful
+			usedTools = append(usedTools, toolCall.FunctionCall.Name)
 			m.nextCallID++
 		}
 	}
@@ -143,14 +136,14 @@ func (m *ToolManager) ExecuteToolCalls(ctx context.Context, resp *llms.ContentRe
 }
 
 // getTool returns the tool with the given name.
-func (m *ToolManager) getTool(name string) tools.Tool {
+func (m *ToolManager) getTool(name string) Tool {
 	return m.tools[name]
 }
 
 // callTool calls the tool with the given tool call, if conditions allow.
 // The returned tuple consists of:
 // - The tool call response
-// - A boolean indicating whether the tool call was successful or blocked
+// - A boolean indicating whether the tool call went through
 // - A boolean indicating whether the tool call requires explaining
 //
 // If a toolcall is blocked, the response would contain the reason.
@@ -161,7 +154,7 @@ func (m *ToolManager) callTool(ctx context.Context, toolCall *llms.ToolCall) (ll
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    fmt.Sprintf("tool not found: %s", toolCall.FunctionCall.Name),
-		}, false, false
+		}, false, true
 	}
 
 	if m.toolRetries[tool.Name()] > m.toolMaxRetries[tool.Name()] {
@@ -169,7 +162,7 @@ func (m *ToolManager) callTool(ctx context.Context, toolCall *llms.ToolCall) (ll
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    "tool has reached the maximum number of consecutive runs. Context should return to the user.",
-		}, false, false
+		}, false, true
 	} // this must be first to block AI retries in explanation windows
 
 	if tool.RequiresApproval() && !m.toolApprovals[tool.Name()] {
@@ -177,11 +170,17 @@ func (m *ToolManager) callTool(ctx context.Context, toolCall *llms.ToolCall) (ll
 			ToolCallID: toolCall.ID,
 			Name:       toolCall.FunctionCall.Name,
 			Content:    "tool requires explicit user approval before execution",
-		}, false, tool.RequiresExplaining()
+		}, false, true
 	}
 
 	response, ok := tool.Call(ctx, toolCall)
 	return response, ok, tool.RequiresExplaining()
+}
+
+func (m *ToolManager) ApproveTools(toolNames []string) {
+	for _, name := range toolNames {
+		m.toolApprovals[name] = true
+	}
 }
 
 func (m *ToolManager) ResetToolRetries() {

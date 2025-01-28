@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/kube-agent/kuery/pkg/flows"
+	"github.com/kube-agent/kuery/pkg/tools/api"
 
 	"github.com/tmc/langchaingo/llms"
 
 	"github.com/kube-agent/kuery/pkg/flows/steps"
 )
 
-var _ Tool = &AddStepTool{}
+var _ api.Tool = &AddStepTool{}
 
 // AddStepTool is a tool that can add a step of planning to a given chain.
 type AddStepTool struct {
@@ -32,15 +33,17 @@ func (t *AddStepTool) Name() string {
 }
 
 func (t *AddStepTool) LLMTool() *llms.Tool {
+	desc := `Extend the execution flow with a step.
+			This tool should be used when a user request requires a multi-step plan for serving.
+			When planning is necessary, plan one step at a time and use this tool to add the step to the flow.
+
+			This tool is useful for when you need to run again before giving the turn back to the user.`
+
 	return &llms.Tool{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
-			Name: t.Name(),
-			Description: `Extend the execution flow with a step.
-						  This tool should be used when a user request requires a multi-step plan for serving.
-						  When planning is necessary, plan one step at a time and use this tool to add the step to the flow.
-
-						  This tool is useful for when you need to run again before giving the turn back to the user.`,
+			Name:        t.Name(),
+			Description: api.AddApprovalRequirementToDescription(t, desc),
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{

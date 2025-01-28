@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/kube-agent/kuery/pkg/tools/api"
 
 	"github.com/tmc/langchaingo/llms"
 
 	crd_discovery "github.com/kube-agent/kuery/pkg/crd-discovery"
 )
 
-var _ Tool = &K8sAPIDiscoveryTool{}
+var _ api.Tool = &K8sAPIDiscoveryTool{}
 
 // K8sAPIDiscoveryTool is a tool that interacts with a vector-db of discovered APIs.
 type K8sAPIDiscoveryTool struct {
@@ -29,13 +30,14 @@ func (t *K8sAPIDiscoveryTool) Name() string {
 }
 
 func (t *K8sAPIDiscoveryTool) LLMTool() *llms.Tool {
+	desc := `This tool is used to learn about custom-resources (non-builtin resources!) before interacting with them within the dynamic client.
+				You MUST NOT use this tool for builtin kubernetes resources such as deployments, pods...`
+
 	return &llms.Tool{
 		Type: functionToolType,
 		Function: &llms.FunctionDefinition{
-			Name: t.Name(),
-			Description: `This tool is used to learn about custom-resources (non-builtin resources!) before interacting with them within the dynamic client.
-							You MUST NOT use this tool for builtin kubernetes resources such as deployments, pods...`,
-
+			Name:        t.Name(),
+			Description: api.AddApprovalRequirementToDescription(t, desc),
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{

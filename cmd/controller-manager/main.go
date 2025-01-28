@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/kube-agent/kuery/pkg/kuery"
+	"github.com/kube-agent/kuery/pkg/tools/api"
 	"log"
 	"os"
 
@@ -79,9 +80,9 @@ func main() {
 	}
 }
 
-func setupToolsMgr(ctx context.Context, cfg *rest.Config) *kuery.ToolManager {
+func setupToolsMgr(ctx context.Context, cfg *rest.Config) *api.ToolManager {
 	logger := klog.FromContext(ctx)
-	var callables []tools.Tool
+	var callables []api.Tool
 	var maxRetries []int
 
 	operatorsRetriever, err := operators_db.NewMilvusStore(ctx)
@@ -113,5 +114,5 @@ func setupToolsMgr(ctx context.Context, cfg *rest.Config) *kuery.ToolManager {
 		maxRetries = append(maxRetries, 1)
 	}
 
-	return kuery.NewToolManager().WithTools(callables, maxRetries)
+	return api.NewToolManager().WithTools(callables, maxRetries)
 }

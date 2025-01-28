@@ -1,7 +1,8 @@
-package tools
+package api
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/tmc/langchaingo/llms"
 )
@@ -12,8 +13,8 @@ type Tool interface {
 	Name() string
 	// LLMTool returns the tool as an LLM tool usable by the LLM API.
 	LLMTool() *llms.Tool
-	// Call executes the tool call and returns the response.
-	// If the tool fails, the second return value is false.
+	// Call executes the tool call and returns the response and whether the
+	// call was successful.
 	Call(ctx context.Context, toolCall *llms.ToolCall) (llms.ToolCallResponse, bool)
 	// RequiresExplaining returns whether the tool requires explaining after
 	// execution.
@@ -21,4 +22,12 @@ type Tool interface {
 	// RequiresApproval returns whether the tool requires approval before
 	// execution.
 	RequiresApproval() bool
+}
+
+func AddApprovalRequirementToDescription(tool Tool, description string) string {
+	if tool.RequiresApproval() {
+		return fmt.Sprintf("%s\nIMPORTANT: THIS TOOL REQUIRES EXPLICIT USER CONSENT, "+
+			"USE 'RequestApprovalForTools' TOOL FIRST.", description)
+	}
+	return description
 }

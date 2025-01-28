@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/kube-agent/kuery/pkg/flows"
+	"github.com/kube-agent/kuery/pkg/tools/api"
 
 	"github.com/tmc/langchaingo/llms"
 
@@ -16,19 +17,23 @@ import (
 )
 
 // ImportKueryFlowTool is a tool that can get or execute a KueryFlow object.
-// TODO: think of execution modes, add side-quests for recalcing missing step args.
+// TODO: Add side-quests for recalculating missing step args.
+// TODO: Right now the model gets "execute X call" for simplicity, in the future the model should not be involved
 type ImportKueryFlowTool struct {
-	client clientset.Interface
-	chain  flows.Chain
-	llm    llms.Model
+	client  clientset.Interface
+	chain   flows.Chain
+	toolMgr *api.ToolManager
+	llm     llms.Model
 }
 
 // NewImportKueryFlowTool creates a new ImportKueryFlowTool.
-func NewImportKueryFlowTool(client clientset.Interface, chain flows.Chain, llm llms.Model) *ImportKueryFlowTool {
+func NewImportKueryFlowTool(client clientset.Interface, chain flows.Chain,
+	toolMgr *api.ToolManager, llm llms.Model) *ImportKueryFlowTool {
 	return &ImportKueryFlowTool{
-		client: client,
-		chain:  chain,
-		llm:    llm,
+		client:  client,
+		chain:   chain,
+		toolMgr: toolMgr,
+		llm:     llm,
 	}
 }
 
@@ -37,13 +42,14 @@ func (t *ImportKueryFlowTool) Name() string {
 }
 
 func (t *ImportKueryFlowTool) LLMTool() *llms.Tool {
+	desc := `ImportKueryFlow is a tool that is used for getting or executing KueryFlows. These functionalities
+			are split because in general you should not execute a KueryFlow without the user's consent.`
+
 	return &llms.Tool{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
-			Name: t.Name(),
-			Description: `ImportKueryFlow is a tool that is used for getting or executing KueryFlows. These functionalities
-							are split because in general you should not execute a KueryFlow without the user's consent.`,
-
+			Name:        t.Name(),
+			Description: api.AddApprovalRequirementToDescription(t, desc),
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -159,7 +165,7 @@ func (t *ImportKueryFlowTool) RequiresExplaining() bool {
 
 // RequiresApproval returns whether the tool requires approval before
 // execution.
-func (t *ImportKueryFlowTool) RequiresApproval() bool { return false }
+func (t *ImportKueryFlowTool) RequiresApproval() bool { return true }
 
 func (t *ImportKueryFlowTool) listKueryFlows(ctx context.Context, namespace string) ([]corev1alpha1.KueryFlow, error) {
 	kueryFlows, err := t.client.CoreV1alpha1().KueryFlows(namespace).List(ctx, metav1.ListOptions{})
@@ -202,6 +208,7 @@ func (t *ImportKueryFlowTool) createToolStep(step corev1alpha1.Step) steps.Step 
 		})
 	}
 
+	t.toolMgr.ApproveTools([]string{step.FunctionCall.Name}) // approve the tool to be executed
 	// in this case we can simply create a tool step
 	return steps.NewHumanStep(func(_ context.Context) string {
 		return fmt.Sprintf("Execute the following tool-call:\n%v", *step.FunctionCall)

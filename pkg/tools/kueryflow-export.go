@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/kube-agent/kuery/pkg/tools/api"
 
 	"github.com/tmc/langchaingo/llms"
 
@@ -14,11 +15,10 @@ import (
 	clientset "github.com/kube-agent/kuery/pkg/generated/clientset/versioned"
 )
 
-var _ Tool = &ExportKueryFlowTool{}
+var _ api.Tool = &ExportKueryFlowTool{}
 
 // ExportKueryFlowTool is a tool that can can export a KueryFlow from a
 // conversation.
-// TODO: make flow extraction more deterministic by having the model choose steps from history instead of building KF object.
 type ExportKueryFlowTool struct {
 	client clientset.Interface
 	// toolCallGetter is a function that can get a tool-call by ID.
@@ -39,21 +39,21 @@ func (t *ExportKueryFlowTool) Name() string {
 }
 
 func (t *ExportKueryFlowTool) LLMTool() *llms.Tool {
+	desc := `ExportKueryFlow is a tool that is used to export a KueryFlow from the active conversation.
+			A KueryFlow is a CR that contains a sequence of tool-calls. An exported KueryFlow can be
+			later executed using the ImportKueryFlow tool.
+
+			A flow of tool-calls may be completely deterministic if it contains concrete argument values,
+			or indeterministic if it contains arguments that should be recalculated upon execution.
+
+			YOU SHOULD ALWAYS ALWAYS PREFER deterministic tool-calls when possible.
+			The user should be fully aware of what you're exporting before it is done.`
+
 	return &llms.Tool{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
-			Name: t.Name(),
-			Description: `ExportKueryFlow is a tool that is used to export a KueryFlow from the active conversation.
-							A KueryFlow is a CR that contains a sequence of tool-calls. An exported KueryFlow can be
-							later executed using the ImportKueryFlow tool.
-
-							A flow of tool-calls may be completely deterministic if it contains concrete argument values,
-							or indeterministic if it contains arguments that should be recalculated upon execution.
-
-							YOU SHOULD ALWAYS ALWAYS PREFER deterministic tool-calls when possible.
-							Let the user know of the steps you intend to include in natural language and get approval
-							before actually exporting.`,
-
+			Name:        t.Name(),
+			Description: api.AddApprovalRequirementToDescription(t, desc),
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{

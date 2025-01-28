@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/kube-agent/kuery/pkg/tools/api"
 
 	"github.com/tmc/langchaingo/llms"
 
@@ -12,7 +13,7 @@ import (
 
 const functionToolType = "function"
 
-var _ Tool = &OperatorsRAGTool{}
+var _ api.Tool = &OperatorsRAGTool{}
 
 // OperatorsRAGTool is a tool that retrieves the operator schema that is most relevant to the prompt.
 type OperatorsRAGTool struct {
@@ -31,16 +32,17 @@ func (ort *OperatorsRAGTool) Name() string {
 }
 
 func (ort *OperatorsRAGTool) LLMTool() *llms.Tool {
+	desc := `Retrieve the operator information that is most relevant to the prompt.
+			This tool is used to retrieve kubernetes operators information before answering a relevant user prompt.
+			This tool should be used before generating answers from nothing. Do not over-use with the same prompt.
+
+			To install an operator, you must POST the Subscription specified in a schema to the dynamic K8s client.`
+
 	return &llms.Tool{
 		Type: functionToolType,
 		Function: &llms.FunctionDefinition{
-			Name: ort.Name(),
-			Description: `Retrieve the operator information that is most relevant to the prompt.
-						  This tool is used to retrieve kubernetes operators information before answering a relevant user prompt.
-						  This tool should be used before generating answers from nothing. Do not over-use with the same prompt.
-
-						  To install an operator, you must POST the Subscription specified in a schema to the dynamic K8s client.`,
-
+			Name:        ort.Name(),
+			Description: api.AddApprovalRequirementToDescription(ort, desc),
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{

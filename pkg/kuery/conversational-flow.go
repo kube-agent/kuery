@@ -6,8 +6,8 @@ import (
 	"github.com/fatih/color"
 	"github.com/kr/pretty"
 	"github.com/kube-agent/kuery/pkg/flows"
+	"github.com/kube-agent/kuery/pkg/tools/api"
 	"github.com/tmc/langchaingo/llms"
-
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
@@ -20,22 +20,23 @@ import (
 type ConversationalFlow struct {
 	llm     llms.Model
 	chain   flows.Chain
-	toolMgr *ToolManager
+	toolMgr *api.ToolManager
 
 	systemPrompt string
 }
 
 // NewConversationalFlow creates a new conversational flow.
-func NewConversationalFlow(systemPrompt string, llm llms.Model, toolMgr *ToolManager,
+func NewConversationalFlow(systemPrompt string, llm llms.Model, toolMgr *api.ToolManager,
 	cfg *rest.Config) *ConversationalFlow {
 	chain := flows.NewChain(nil)
 
 	planner := tools.NewAddStepTool(chain, llm)
+	toolMgr = toolMgr.WithTool(planner, 1)
 
 	if cfg != nil {
 		coreClient, err := clientset.NewForConfig(cfg)
 		if err == nil {
-			importKueryFlowTool := tools.NewImportKueryFlowTool(coreClient, chain, llm)
+			importKueryFlowTool := tools.NewImportKueryFlowTool(coreClient, chain, toolMgr, llm)
 
 			exportKueryFlowTool := tools.NewExportKueryFlowTool(coreClient, toolMgr.GetToolCall)
 
@@ -45,10 +46,13 @@ func NewConversationalFlow(systemPrompt string, llm llms.Model, toolMgr *ToolMan
 		}
 	}
 
+	toolsApprovalTool := tools.NewToolApprovalTool(chain, llm, toolMgr)
+	toolMgr = toolMgr.WithTool(toolsApprovalTool, 2)
+
 	return &ConversationalFlow{
 		llm:          llm,
 		chain:        chain,
-		toolMgr:      toolMgr.WithTool(planner, 1),
+		toolMgr:      toolMgr,
 		systemPrompt: systemPrompt,
 	}
 }
@@ -122,7 +126,7 @@ func (f *ConversationalFlow) execute(ctx context.Context,
 		}
 
 		if requiresClarificationStep {
-			logger.V(4).Info("Added AI Step")
+			logger.V(2).Info("Added AI Step")
 			f.chain.PushNext(steps.NewLLMStep(f.llm), true)
 		}
 	}
